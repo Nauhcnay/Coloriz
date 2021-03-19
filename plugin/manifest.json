@@ -1,0 +1,61 @@
+{
+  "id": "ebf04306",
+  "name": "Coloriz",
+  "version": "1.0.0",
+  "main": "index.html",
+  "manifestVersion": 4,
+  "host": [
+    {
+      "app": "PS",
+      "minVersion": "22.0.0"
+    }
+  ],
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "main",
+      "label": {
+        "default": "Coloriz"
+      },
+      "minimumSize": {
+        "width": 230,
+        "height": 200
+      },
+      "maximumSize": {
+        "width": 2000,
+        "height": 2000
+      },
+      "preferredDockedSize": {
+        "width": 230,
+        "height": 300
+      },
+      "preferredFloatingSize": {
+        "width": 230,
+        "height": 300
+      },
+      "icons": [
+        {
+          "width": 23,
+          "height": 23,
+          "path": "icons/icon.png",
+          "scale": [1,2],
+          "theme": ["darkest", "dark", "medium", "light", "lightest"],
+          "species": ["generic"]
+        }
+    ]
+    }
+  ],
+  "icons": [
+    {
+      "width": 48,
+      "height": 48,
+      "path": "icons/iconPlugin.png",
+      "scale": [
+        1,
+        2
+      ],
+      "theme": ["all"],
+      "species": ["generic"]
+    }
+  ]
+}

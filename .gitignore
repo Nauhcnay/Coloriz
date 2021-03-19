@@ -1,0 +1,34 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# .gitignore entry      Ignores every…
+# target/               …folder (due to the trailing /) recursively
+# target                …file or folder named target recursively
+# /target               …file or folder named target in the top-most directory (due to the leading /)
+# /target/              …folder named target in the top-most directory (leading and trailing /)
+# *.class               …every file or folder ending with .class recursively
+
+dist/
+build/
+node_modules/
+relic/
+/.pnp
+.pnp.js
+package-lock.json
+
+# testing
+coverage
+
+# production
+build
+dist
+
+# misc
+.DS_Store
+.env*
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+yarn.lock
+.cache
