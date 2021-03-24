@@ -1,28 +1,38 @@
+// https://reactjs.org/
 import React, { useState, useEffect } from "react";
 import photoshop from 'photoshop';
+
+// load resource
 import mergeInstruction from '../assets/merge-instruction.png'
 import splitInstruction from '../assets/split-instruction.png'
+
+// load from own scripts
 import {
     handleMergeToolClick,
-    handleSplitToolClick,
+    handleFineSplitToolClick,
+    handleCoarseSplitToolClick,
     readFiles,
     saveBase64Image,
     loadResult,
     loadLineSimplified,
     loadLayer,
     saveMergeHintLayer,
-    saveSplitHintLayer,
+    saveFineSplitHintLayer,
+    saveCoarseSplitHintLayer,
     loadBase64,
     loadLayers,
     activatePaintBucket,
     setColor
 } from '../functions';
+
+// where these model come from?
+// I guess they are all from node.js
 import { Modal } from 'antd';
 import { ThemeProvider, createMuiTheme } from '@material-ui/core/styles';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import { makeStyles, withStyles } from '@material-ui/core/styles';
 import { TextField } from '@adobe/react-spectrum'
-import { red, yellow } from '@material-ui/core/colors';
+import { red, yellow, blue } from '@material-ui/core/colors';
 import Button from '@material-ui/core/Button';
 import Slider from '@material-ui/core/Slider';
 import { PhotoshopPicker } from 'react-color';
@@ -37,6 +47,8 @@ import Paper from '@material-ui/core/Paper';
 import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
 import Scenes from "../components/Scenes.jsx";
+
+// seems to be a entrance of using photo
 const app = photoshop.app;
 
 const theme = createMuiTheme({
@@ -47,13 +59,16 @@ const theme = createMuiTheme({
     }
 });
 
+// https://www.w3schools.com/js/js_arrow_function.asp
+// pass a call back function to maskeStyles
+// but what the const variable used for?
 const useStyles = makeStyles((theme) => ({
     root: {
       minWidth: 240,
       height: '100vh'
       // width: '100%',
       // maxWidth: 360,
-      // backgroundColor: theme.palette.background.paper,
+      // backgroundColor: theme.palette.background.pax`per,
     },
     scenes: {
         overflowY: 'scroll'
@@ -65,19 +80,27 @@ const useStyles = makeStyles((theme) => ({
     }
 }));
 
+// then what this does? what dose with styles returned?
+// ah, a function, so again props is a callback function right?
+// this seems like insert a code block into the html page frame
 const RedRadio = withStyles({
     root: {
       color: red[400],
+      
       '&$checked': {
         color: red[600],
       },
     },
     checked: {},
+    // but what this means?
+    // is this html code or ccs code?
+    // is it ok to 
 })((props) => <Radio color="default" {...props} />);
 
 const YellowRadio = withStyles({
     root: {
         color: yellow[400],
+        
         '&$checked': {
         color: yellow[600],
         },
@@ -85,31 +108,44 @@ const YellowRadio = withStyles({
     checked: {},
 })((props) => <Radio color="default" {...props} />);
 
+const BluewRadio = withStyles({
+    root: {
+        color: blue[400],
+        
+        '&$checked': {
+        color: blue[600],
+        },
+    },
+    checked: {},
+})((props) => <Radio color="default" {...props} />);
+
+
+// Ah I see, so this is the button for both split and merge
 const StateFulButton = (props) => (
-    <Button
-        style={{width: '80%', height: 30 }}
+    // what this code block is?
+    // is that html?
+    <Button style={{width: '80%', height: 30 }}
         variant="contained"
         disabled={props.isLoading}
         onClick={props.onClick}>
         {props.isLoading ? 'Loading...' : props.text}
     </Button>
-)
+);
 
-
+// then what this function does?
 function Panel() {
     const classes = useStyles();
-    const [scenes, setScenes] = useState([])
-    const [activeScene, setActiveScene] = useState(0)
+    const [scenes, setScenes] = useState([]);
+    const [activeScene, setActiveScene] = useState(0);
 
-    const [tab, setTab] = useState(0)
+    const [tab, setTab] = useState(0);
     const handleTabChange = (event, newValue) => {
         setTab(newValue);
       };
 
-    const [isMerging, setIsMerging] = useState(false)
-    const [isSplitting, setIsSplitting] = useState(false)
-    const [isFlatting, setIsFlatting] = useState(false)
-
+    const [isMerging, setIsMerging] = useState(false);
+    const [isSplitting, setIsSplitting] = useState(false);
+    const [isFlatting, setIsFlatting] = useState(false);
 
     const [brushMode, setBrushMode] = useState('merge');
     const handleBrushModeChange = (event) => {
@@ -121,12 +157,16 @@ function Panel() {
     const mergeInstructionText = 'Brush over different segments that need to be merged. When ready, click Merge.'
     const splitInstructionText = 'Connect unconnected green lines where you with to split. When ready, click Split.'    
 
+    // so this inline function could also be so complex?
     useEffect(() => {
         if (brushMode === 'merge') {
             handleMergeToolClick(mergeBrushSize)
         }
-        else if (brushMode === 'split') {
-            handleSplitToolClick(splitBrushSize)
+        else if (brushMode === 'splitfine') {
+            handleFineSplitToolClick(splitBrushSize)
+        }
+        else if (brushMode === 'splitcoarse') {
+            handleCoarseSplitToolClick(mergeBrushSize)
         }
     }, [brushMode])
 
@@ -135,13 +175,15 @@ function Panel() {
             <FormLabel component="legend">Brush Mode</FormLabel>
             <RadioGroup className={classes.radioGroup} aria-label="brush" name="brush" value={brushMode} onChange={handleBrushModeChange}>
                 <FormControlLabel value="merge" control={<RedRadio />} label={<p style={{color: red[800]}}>Merge</p>} />
-                <FormControlLabel value="split" control={<YellowRadio />} label={<p style={{color: yellow[400]}}>Split</p>} />
+                <FormControlLabel value="splitfine" control={<YellowRadio />} label={<p style={{color: yellow[400]}}>Fine Split</p>} />
+                <FormControlLabel value="splitcoarse" control={<BluewRadio />} label={<p style={{color: blue[400]}}>Coarse Split</p>} />
             </RadioGroup>
         </FormControl>
     )
 
     const MergeButton = <StateFulButton onClick={tryMerge} text="Merge" isLoading={isMerging}/>
-    const SplitButton = <StateFulButton onClick={trySplit} text="Split" isLoading={isSplitting}/>
+    const SplitButtonFine = <StateFulButton onClick={trySplitFine} text="Fine Split" isLoading={isSplitting}/>
+    const SplitButtonCoarse = <StateFulButton onClick={trySplitCoarse} text="Coarse Split" isLoading={isSplitting}/>
     const FlatButton = <StateFulButton onClick={tryFlat} text="Flat" isLoading={isFlatting}/>
 
     async function tryFlat() {
@@ -166,10 +208,21 @@ function Panel() {
         setIsMerging(false)
     }
 
-    async function trySplit() {
+    async function trySplitFine() {
         setIsSplitting(true)
         try {
-            await split()
+            await splitfine()
+        }
+        catch (e) {
+            console.log(e)
+        }
+        setIsSplitting(false)
+    }
+
+    async function trySplitCoarse() {
+        setIsSplitting(true)
+        try {
+            await splitcoarse()
         }
         catch (e) {
             console.log(e)
@@ -180,9 +233,13 @@ function Panel() {
     async function flatSingle() {
         console.log('Flatting image...')
         
+        // I guess this is for multi input? so each scene represents one input opened in the photoshop
+        
+        // read data from selected input
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
         const { fileName, documentID, base64String } = scene;
         
+        // convert readed data to the input format of API
         const data = {
             image: base64String,
             net: 512,
@@ -190,6 +247,8 @@ function Panel() {
             preview: false
         }
         const url = 'http://68.100.80.232:8080/flatsingle'
+
+        // get return result
         const response = await fetch(url, {
             method: 'POST', 
             headers: {
@@ -208,12 +267,15 @@ function Panel() {
         await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
         
         console.log('Loading images....')
+
         await loadResult(fileName)
         await loadLineSimplified(fileName)
 
         const newScenes = scenes.map(scene => {
             if (scene.documentID === documentID) {
                 return {
+                    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Spread_syntax
+                    // spread syntax
                     ...scene,
                     line_artist,
                     line_simplified,
@@ -223,6 +285,7 @@ function Panel() {
                     palette
                 }
             }
+            // so if the ID is differnet, then just return the same scene (nonthing changed)
             return scene
         })
         setScenes(newScenes)
@@ -287,15 +350,15 @@ function Panel() {
         setScenes(newScenes)
         console.log('scenes saved in React state')
 
-    } 
+    }
 
-    async function split() {
-        console.log('Splitting...')
+    async function splitcoarse() {
+        console.log('Coarse Splitting...')
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
         const { fileName } = scene;
         
-        await saveSplitHintLayer();
-        const stroke = await loadBase64('split-hint.png')
+        await saveCoarseSplitHintLayer();
+        const stroke = await loadBase64('split-hint-coarse.png')
         
         const data = {
             line_artist: scene.line_artist,
@@ -306,7 +369,7 @@ function Panel() {
             palette: scene.palette,
         }
         console.log('sending request...')
-        const url = 'http://68.100.80.232:8080/splitmanual'
+        const url = 'http://68.100.80.232:8080/splitauto'
         const response = await fetch(url, {
             method: 'POST', 
             headers: {
@@ -321,7 +384,7 @@ function Panel() {
         console.log('got result')
         console.log(result)
 
-        const { line_artist, line_simplified, image, fillmap, layers, palette } = result;
+        const { line_simplified, image, fillmap, layers, palette } = result;
         console.log('Splitting done!')
 
         
@@ -329,6 +392,7 @@ function Panel() {
         await saveBase64Image(image, `${fileName}-result.png`)
         await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
 
+        //最好之后把这步跳过去
         layers.forEach(async(layer, index) => {
             await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
         })
@@ -352,11 +416,90 @@ function Panel() {
         })
         setScenes(newScenes)
         console.log('scenes saved in React state')
+    }
+
+    async function splitfine() {
+        // 从scense中读取必要的信息
+        // 但相关的定义和借口都不是很清楚，因此需要之后进一步搞清楚
+        console.log('Fine Splitting...');
+        const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0];
+        const { fileName } = scene;
+        
+        await saveFineSplitHintLayer();
+        const stroke = await loadBase64('split-hint-fine.png');
+        
+        const data = {
+            line_artist: scene.line_artist,
+            line_simplified: scene.line_simplified,
+            fillmap: scene.fillmap,
+            fillmap_artist: scene.fillmap_artist,
+            stroke,
+            palette: scene.palette,
+        };
+        
+        // 发送请求
+        console.log('sending request...');
+        const url = 'http://68.100.80.232:8080/splitmanual';
+        const response = await fetch(url, {
+            method: 'POST', 
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        console.log('got response');
+        console.log(response);
+        
+        const result = await response.json();
+        console.log('got result');
+        console.log(result);
+
+        // 读取回复，并显示
+        const { line_artist, line_simplified, image, fillmap, layers, palette } = result;
+        console.log('Splitting done!');
+
+        
+        console.log('Saving images...');
+        await saveBase64Image(image, `${fileName}-result.png`);
+        await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`);
+        
+
+        // we really don't need to save layers everytime, then we can save lots of time
+        layers.forEach(async(layer, index) => {
+            await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
+        });
+        
+        console.log('Loading image....');
+        await loadResult(fileName);
+        await loadLineSimplified(fileName); 
+
+        // 重设ps中的显示内容，这部分又是和ps打交道，因此需要额外的控制接口
+        // 也是我应该尽快搞懂的内容
+        // 
+        const newScenes = scenes.map(scene => {
+            if (scene.documentID === app.activeDocument._id) {
+                return {
+                    ...scene,
+                    fillmap,
+                    palette,
+                    image,
+                    layers,
+                    line_artist
+                }
+            }
+            return scene
+        })
+        setScenes(newScenes)
+        console.log('scenes saved in React state')
 
     }
 
+    // till now are functions working with my API
+    // then the following should about the colorizing part
     async function loadSegments() {
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment
+        // destructuring assignment
         const { fileName, layers } = scene;
         await loadLayers(fileName, layers.length)       
     }
@@ -366,7 +509,8 @@ function Panel() {
         setScenes([...scenes, ...newScenes])
     }
 
-
+    // what this function does?
+    // I really don't understand why don't just declar a function?
     const listener = (event, descriptor) => {
         if (event === 'close') {
             const { documentID } = descriptor
@@ -374,6 +518,7 @@ function Panel() {
             setScenes(newScenes);
         }
      }
+
     useEffect(() => {        
         photoshop.action.addNotificationListener([
             {
@@ -385,14 +530,32 @@ function Panel() {
         ], listener);
     }, [])
 
+    const brush = () =>{
+            if (brushMode === 'merge' ){
+                return MergeButton;
+            }
+            else if (brushMode === 'splitfine'){
+                return SplitButtonFine;
+            } 
+            else if (brushMode ===  'splitcoarse'){
+                return SplitButtonCoarse; 
+            }}
+
     const FlattingTab = (
+       
+        //https://www.reactenlightenment.com/react-jsx/5.1.html
+        // JSX allows us to put HTML into JavaScript.
+        // https://reactjs.org/docs/introducing-jsx.html
+        
         <>
             <Grid item xs={12} style={{ height: 40, display: 'flex', justifyContent: 'center'}}>
                 { FlatButton }
             </Grid> 
+            
             <Grid item xs={12}>
                 { BrushRadioGroup }
             </Grid>
+            
             <Grid item xs={12}>
                 <Typography variant="h6" component="div">
                     Instruction:
@@ -401,6 +564,7 @@ function Panel() {
                     { brushMode === 'merge' ? mergeInstructionText : splitInstructionText }
                 </Typography>
             </Grid>
+
             <Grid item xs={12}>
                 <img
                     src={brushMode === 'merge' ? mergeInstruction : splitInstruction}
@@ -409,14 +573,17 @@ function Panel() {
                     height="93"
                 />
             </Grid>
+            
             <Grid item xs={12} style={{ display: 'flex', justifyContent: 'center'}}>
-                { brushMode === 'merge' ?  MergeButton : SplitButton }
+                {brush()}
             </Grid>
         </>
-    )
+        
+    );
 
     const colorInsturctionText = 'Select the color in the palette that you want to apply to the selected layer, and use the bucket fill tool to change the color.'
     
+    // what these function does?
     // const characterDummy = {
     //     id: 0,
     //     characterName: '',
@@ -539,6 +706,8 @@ function Panel() {
     const colors2 = ['#333333', '#808080', '#CCCCCC', '#D33115', '#E27300', '#FCC400', '#B0BC00', '#68BC00', '#16A5A5', '#009CE0', '#7B64FF', '#FA28FF']
     const colors3 = ['#000000', '#666666', '#B3B3B3', '#9F0500', '#C45100', '#FB9E00', '#808900', '#194D33', '#0C797D', '#0062B1', '#653294', '#AB149E']
     
+    
+    // TODO: try to make this function connect to API, or just remove this function
     const LoadSegmentsButton = <StateFulButton onClick={loadSegments} text="Load Segments" isLoading={false}/>
     const ColoringTab = (
         <>
@@ -594,6 +763,7 @@ function Panel() {
                 <Scenes scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene}/>
                 <Button onClick={loadNewScenes}>+ Add More Scenes...</Button>
             </Grid>
+
             <Grid item container xs={7} style={{ padding: 10 }}>
             <div>
                 <Tabs
@@ -610,10 +780,13 @@ function Panel() {
                 { tab === 0 ? FlattingTab : ColoringTab }
             </div>
             </Grid>
+
         </Grid>
     );
 }
 
+// to understand export and import 
+// https://zhuanlan.zhihu.com/p/144475026
 export default function ThemedPanel() {
     return (
         // <ThemeProvider theme={theme}>

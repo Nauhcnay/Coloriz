@@ -1,6 +1,7 @@
 import photoshop from 'photoshop';
 import uxp from 'uxp'
 import btoa from 'btoa';
+import os from 'os';
 const hexToHsl = require('hex-to-hsl');
 const app = photoshop.app;
 const batchPlay = photoshop.action.batchPlay;
@@ -64,7 +65,7 @@ export async function handleMergeToolClick(brushSize) {
     await setColorRed();
 }
 
-export async function handleSplitToolClick(brushSize) {
+export async function handleFineSplitToolClick(brushSize) {
     const splitHintLayer = getSplitHintLayer()
     // Select layer if already exists
     if (splitHintLayer) {
@@ -100,6 +101,45 @@ export async function handleSplitToolClick(brushSize) {
     }
     await activateBrush();
     await setBrushSize(2);
+    await setColorYellow();
+}
+
+export async function handleCoarseSplitToolClick(brushSize) {
+    const splitHintLayer = getSplitHintLayer()
+    // Select layer if already exists
+    if (splitHintLayer) {
+        const result = await batchPlay(
+            [
+                {
+                    "_obj": "select",
+                    "_target": [
+                        {
+                            "_ref": "layer",
+                            "_name": "split-hint"
+                        }
+                    ],
+                    "makeVisible": false,
+                    "layerID": [
+                        splitHintLayer._id
+                    ],
+                    "_isCommand": false,
+                    "_options": {
+                        "dialogOptions": "dontDisplay"
+                    }
+                }
+            ],
+            {
+                "synchronousExecution": false,
+                "modalBehavior": "fail"
+            }
+        );            
+    }
+    // Otherwise create it
+    else {
+        createSplitHintLayer()
+    }
+    await activateBrush();
+    await setBrushSize(10);
     await setColorYellow();
 }
 
@@ -574,7 +614,7 @@ export async function readFiles() {
 
 // Set a folder for persistent token
 async function setPersistentFolder() {
-    let entry = await fs.getFolder();
+    let entry = fs.getFolder();
     let token = await fs.createPersistentToken(entry);
     localStorage.setItem("persistentFolder", token);
 }
@@ -677,10 +717,18 @@ export async function saveMergeHintLayer() {
 }
 
 // Save the split hint layer using "saveVisibleLayer"
-export async function saveSplitHintLayer() {
+export async function saveFineSplitHintLayer() {
     await hideAllLayers();
     await showSplitHintLayer();
-    await saveVisibleLayer('split-hint.png')
+    await saveVisibleLayer('split-hint-fine.png')
+    await showAllLayers();
+}
+
+// Save the split hint layer using "saveVisibleLayer"
+export async function saveCoarseSplitHintLayer() {
+    await hideAllLayers();
+    await showSplitHintLayer();
+    await saveVisibleLayer('split-hint-coarse.png')
     await showAllLayers();
 }
 
