@@ -60,7 +60,7 @@ export async function handleMergeToolClick(brushSize) {
     else {
         createMergeHintLayer()
     }
-    await activateBrush();
+    await activatePencil();
     await setBrushSize(2);
     await setColorRed();
 }
@@ -99,7 +99,7 @@ export async function handleFineSplitToolClick(brushSize) {
     else {
         createSplitHintLayer()
     }
-    await activateBrush();
+    await activatePencil();
     await setBrushSize(2);
     await setColorYellow();
 }
@@ -141,6 +141,28 @@ export async function handleCoarseSplitToolClick(brushSize) {
     await activateBrush();
     await setBrushSize(10);
     await setColorYellow();
+}
+
+async function activatePencil() {
+    const result = await batchPlay(
+    [
+    {
+        "_obj": "select",
+        "_target": [
+            {
+                "_ref": "pencilTool"
+            }
+        ],
+        "_isCommand": false,
+        "_options": {
+            "dialogOptions": "dontDisplay"
+        }
+    }
+    ],{
+    "synchronousExecution": false,
+    "modalBehavior": "fail"
+    });
+    
 }
 
 async function activateBrush() {
@@ -371,7 +393,41 @@ export async function activatePaintBucket() {
 /**
  * Layer
  */
-async function moveLayerToTop(layerID) {
+export async function selectLayerByName(layerName){
+    const layer = getLayerByName(layerName)
+    const result = await batchPlay(
+            [
+                {
+                    "_obj": "select",
+                    "_target": [
+                        {
+                            "_ref": "layer",
+                            "_name": layerName
+                        }
+                    ],
+                    "makeVisible": false,
+                    "layerID": [
+                        layer._id
+                    ],
+                    "_isCommand": false,
+                    "_options": {
+                        "dialogOptions": "dontDisplay"
+                    }
+                }
+            ],
+            {
+                "synchronousExecution": false,
+                "modalBehavior": "fail"
+            }
+        );            
+}
+export async function moveSplitHintToTop(){
+    const layer = getLayerByName('split-hint');
+    console.log("Move split hint layer to top")
+    await moveLayerToTop(layer._id)
+}
+
+export async function moveLayerToTop(layerID) {
     const result = await batchPlay(
     [
     {
@@ -482,6 +538,7 @@ async function showLayer(name) {
 
 async function hideAllLayers() {
     const layers = app.activeDocument.layers;
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach
     layers.forEach(layer => {
         const { name } = layer;
         hideLayer(name)
@@ -492,7 +549,10 @@ async function showAllLayers() {
     const layers = app.activeDocument.layers;
     layers.forEach(layer => {
         const { name } = layer;
-        showLayer(name)
+        if (name !== "line_artist_org"){
+            showLayer(name)
+        }
+       
     })
 }
 
@@ -501,7 +561,7 @@ async function createLayer(name) {
     return layer
 }
 
-function getLayerByName(name) {
+export function getLayerByName(name) {
     const layers = app.activeDocument.layers;
     const filterResult = layers.filter(layer => layer.name === name)
     if (filterResult.length > 0) {
@@ -511,6 +571,9 @@ function getLayerByName(name) {
 }
 
 async function renameActiveLayer(name) {
+    // 所以操作ps就只要send这样一个bactch play的命令就可以了，但是这个命令的定义会非常模糊
+    // 考虑修改这里需要极为慎重
+    // https://www.adobe.io/photoshop/uxp/ps_reference/media/advanced/batchplay/    
     const result = await batchPlay(
     [
     {
@@ -557,6 +620,10 @@ async function showSplitHintLayer() {
     await showLayer('split-hint')
 }
 
+function getResultLayer() {
+    return getLayerByName('Background');
+}
+
 function getMergeHintLayer() {
     return getLayerByName('merge-hint');
 }
@@ -594,7 +661,9 @@ export async function readFiles() {
         types: uxp.storage.fileTypes.images
     });
 
-    const newScenes = await Promise.all(files.map(async(file) => {
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
+    // 有意思的函数
+    const newScenes = await Promise.all(files.map(async (file) => {
         const fileContents = await file.read({format: uxp.storage.formats.binary});
         const base64String = _arrayBufferToBase64(fileContents)
         
@@ -613,9 +682,9 @@ export async function readFiles() {
 }
 
 // Set a folder for persistent token
-async function setPersistentFolder() {
+function setPersistentFolder() {
     let entry = fs.getFolder();
-    let token = await fs.createPersistentToken(entry);
+    let token = fs.createPersistentToken(entry);
     localStorage.setItem("persistentFolder", token);
 }
 
@@ -624,11 +693,13 @@ async function ensurePersistentToken() {
     const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
     if (!thePersistentFolderToken) {
         alert('You must first choose a path where you want to save temporary files.')
-        await setPersistentFolder()
+        //this is a modal window, it should block everything until user select the temp folder
+        setPersistentFolder()
     }
 }
 
 // Get an existing file using persistent token
+// 但这些api的知识又是从哪里得知的？
 async function getExistingFile(fileName) {
     await ensurePersistentToken();
     const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
@@ -710,10 +781,16 @@ async function saveVisibleLayer(fileName) {
 
 // Save the merge hint layer using "saveVisibleLayer"
 export async function saveMergeHintLayer() {
+    // this function is very low efficient
     await hideAllLayers();
     await showMergeHintLayer();
     await saveVisibleLayer('merge-hint.png')
     await showAllLayers();
+    let layer = getLayerByName('merge-hint')
+    layer.delete();
+    await createLayer('merge-hint');
+    layer = getLayerByName('merge-hint')
+    await moveLayerToTop(layer._id)
 }
 
 // Save the split hint layer using "saveVisibleLayer"
@@ -722,6 +799,11 @@ export async function saveFineSplitHintLayer() {
     await showSplitHintLayer();
     await saveVisibleLayer('split-hint-fine.png')
     await showAllLayers();
+    let layer = getLayerByName('split-hint')
+    layer.delete();
+    await createLayer('split-hint');
+    layer = getLayerByName('split-hint')
+    await moveLayerToTop(layer._id)
 }
 
 // Save the split hint layer using "saveVisibleLayer"
@@ -730,25 +812,63 @@ export async function saveCoarseSplitHintLayer() {
     await showSplitHintLayer();
     await saveVisibleLayer('split-hint-coarse.png')
     await showAllLayers();
+    let layer = getLayerByName('split-hint')
+    layer.delete();
+    await createLayer('split-hint');
+    layer = getLayerByName('split-hint')
+    await moveLayerToTop(layer._id)
 }
 
 async function openInLayer(fileName, layerName) {
     const file = await getExistingFile(fileName)
 
     const mainDocument = app.activeDocument;
-    await app.open(file)
+    await app.open(file);
 
-    const tempDocument = app.activeDocument
+    // why there have two variable with the same value?
+    // no there are different after open a new file
+    const tempDocument = app.activeDocument;
 
-    await renameActiveLayer(layerName)
-    await tempDocument.layers[0].duplicate(mainDocument)
-    await tempDocument.closeWithoutSaving()
+    // why do this?
+    await renameActiveLayer(layerName);
+    await tempDocument.layers[0].duplicate(mainDocument);
+    await tempDocument.closeWithoutSaving();
 
-    app.activeDocument = mainDocument
+
+    app.activeDocument = mainDocument;
 }
 
+
+export async function unlockLayer(documentID){
+    // is const result = really necessary?
+    console.log("unlock background layer...");
+    
+    const result = await batchPlay(
+    [
+       {
+          "_obj": "historyStateChanged",
+          "documentID": documentID,
+          //"ID": 943, //这个id有啥用？
+          "name": "Make Layer",
+          "hasEnglish": true,
+          "_isCommand": false,
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       //"modalBehavior": "fail"
+    });
+    
+    await renameActiveLayer("line_artist_org");
+    await hideLayer("line_artist_org");
+}
+
+
+
 // Load result into a new layer
-export async function loadResult(baseName) {
+export async function loadResult(baseName, move) {
     // Delete if already exists
     const resultLayer = getLayerByName('result')
     if (resultLayer) {
@@ -756,13 +876,53 @@ export async function loadResult(baseName) {
     }
 
     // Load image into layer
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals
+    // template literals
     await openInLayer(`${baseName}-result.png`, 'result')
-    const layer = getLayerByName('result')
-    await moveLayerToBottom(layer._id)
+    if (move){
+        const layer = getLayerByName('result')
+        await moveLayerToBottom(layer._id)    
+    }
+    
+}
+
+export async function loadLineArtist(baseName, move) {
+    // Delete if already exists
+    console.log('loading artist line')
+    const artistLayer = getLayerByName('line_artist')
+    if (artistLayer) {
+        artistLayer.delete();
+    }
+
+    // Load image into layer
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals
+    // template literals
+    await openInLayer(`${baseName}-line_artist.png`, 'line_artist')
+    if (move){
+        const layer = getLayerByName('line_artist')
+        await moveLayerToBottom(layer._id)
+    }
 }
 
 // Load line_simplified into a new layer
-export async function loadLineSimplified(baseName) {
+export async function loadLineHint(baseName, move) {
+    // Delete if already exists
+    const lineSimplifiedLayer = getLayerByName('line_hint')
+    if (lineSimplifiedLayer) {
+        lineSimplifiedLayer.delete()
+    }
+
+    // Load image into layer
+    await openInLayer(`${baseName}-line_hint.png`, 'line_hint')
+    if (move){
+        const layer = getLayerByName('line_hint')
+        await moveLayerToTop(layer._id)
+    }
+    
+}
+
+// Load line_simplified into a new layer
+export async function loadLineSimplified(baseName, move) {
     // Delete if already exists
     const lineSimplifiedLayer = getLayerByName('line_simplified')
     if (lineSimplifiedLayer) {
@@ -771,8 +931,11 @@ export async function loadLineSimplified(baseName) {
 
     // Load image into layer
     await openInLayer(`${baseName}-line_simplified.png`, 'line_simplified')
-    const layer = getLayerByName('line_simplified')
-    await moveLayerToTop(layer._id)
+    if (move){
+        const layer = getLayerByName('line_simplified')
+        await moveLayerToTop(layer._id)
+    }
+    
 }
 
 export async function loadLayer(fileName, layerName) {
@@ -880,6 +1043,7 @@ export async function loadLayers(baseName, numLayers) {
 }
 
 // This fails a lot when # of images gets big, deprecated
+// 好吧这就是他为什么不载入layer的原因
 async function loadLayersBatch(baseName, numLayers) {
     deleteLayers(layerNames)
 

@@ -22,7 +22,12 @@ import {
     loadBase64,
     loadLayers,
     activatePaintBucket,
-    setColor
+    setColor,
+    unlockLayer,
+    loadLineArtist,
+    moveSplitHintToTop,
+    selectLayerByName,
+    loadLineHint
 } from '../functions';
 
 // where these model come from?
@@ -258,18 +263,22 @@ function Panel() {
         })
         
         const result = await response.json();
-        const { line_artist, line_simplified, image, fillmap, fillmap_c, palette } = result;
+        const { line_artist, line_simplified, image, fillmap, fillmap_c, palette, line_hint } = result;
 
         console.log('Flatting done!')
         
         console.log('Saving images...')
         await saveBase64Image(image, `${fileName}-result.png`)
+        await saveBase64Image(line_artist, `${fileName}-line_artist.png`) 
         await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
+        await saveBase64Image(line_hint, `${fileName}-line_hint.png`) 
         
         console.log('Loading images....')
-
-        await loadResult(fileName)
-        await loadLineSimplified(fileName)
+        await unlockLayer(documentID);
+        await loadLineArtist(fileName, true)
+        await loadResult(fileName, true)
+        await loadLineHint(fileName, true)
+        await loadLineSimplified(fileName, true)
 
         const newScenes = scenes.map(scene => {
             if (scene.documentID === documentID) {
@@ -325,14 +334,18 @@ function Panel() {
         await saveBase64Image(image, `${fileName}-result.png`)
         await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
         
-        layers.forEach(async(layer, index) => {
-            await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
-        })
+        // layers.forEach(async(layer, index) => {
+        //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
+        // })
 
         
         console.log('Loading images....')
-        await loadResult(fileName)          
-        await loadLineSimplified(fileName)
+        await loadResult(fileName, true)          
+        await loadLineSimplified(fileName, true)
+        await selectLayerByName("merge-hint")
+
+        console.log('Cleanup merge strokes...')
+
 
                 
         const newScenes = scenes.map(scene => {
@@ -342,7 +355,7 @@ function Panel() {
                     fillmap,
                     palette,
                     image,
-                    layers
+                    // layers
                 }
             }
             return scene
@@ -390,16 +403,17 @@ function Panel() {
         
         console.log('Saving images...')
         await saveBase64Image(image, `${fileName}-result.png`)
-        await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
+        await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`)
 
         //最好之后把这步跳过去
-        layers.forEach(async(layer, index) => {
-            await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
-        })
+        // layers.forEach(async(layer, index) => {
+        //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
+        // })
         
         console.log('Loading image....')
-        await loadResult(fileName)
-        await loadLineSimplified(fileName)
+        await loadResult(fileName, true)
+        await loadLineSimplified(fileName, true)
+        await selectLayerByName('split-hint')
 
         const newScenes = scenes.map(scene => {
             if (scene.documentID === app.activeDocument._id) {
@@ -408,8 +422,7 @@ function Panel() {
                     fillmap,
                     palette,
                     image,
-                    layers,
-                    line_artist
+                    // layers,
                 }
             }
             return scene
@@ -430,7 +443,7 @@ function Panel() {
         
         const data = {
             line_artist: scene.line_artist,
-            line_simplified: scene.line_simplified,
+            // line_simplified: scene.line_simplified,
             fillmap: scene.fillmap,
             fillmap_artist: scene.fillmap_artist,
             stroke,
@@ -462,16 +475,22 @@ function Panel() {
         console.log('Saving images...');
         await saveBase64Image(image, `${fileName}-result.png`);
         await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`);
+        await saveBase64Image(line_artist, `${fileName}-line_artist.png`)
         
 
-        // we really don't need to save layers everytime, then we can save lots of time
-        layers.forEach(async(layer, index) => {
-            await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
-        });
+        // // we really don't need to save layers everytime, then we can save lots of time
+        // layers.forEach(async(layer, index) => {
+        //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
+        // });
         
         console.log('Loading image....');
-        await loadResult(fileName);
-        await loadLineSimplified(fileName); 
+        // 这里应该增加一个函数
+        // 去除输入的锁定，并且重命名整个layer
+        // 还需要再入服务器端返回的增加了alhpha通道的line art
+        await loadLineArtist(fileName, true);
+        await loadResult(fileName, true);
+        await loadLineSimplified(fileName, true); 
+        await selectLayerByName('split-hint')
 
         // 重设ps中的显示内容，这部分又是和ps打交道，因此需要额外的控制接口
         // 也是我应该尽快搞懂的内容
@@ -483,7 +502,7 @@ function Panel() {
                     fillmap,
                     palette,
                     image,
-                    layers,
+                    // layers,
                     line_artist
                 }
             }
