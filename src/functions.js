@@ -4,12 +4,17 @@ import btoa from 'btoa';
 import os from 'os';
 const hexToHsl = require('hex-to-hsl');
 const app = photoshop.app;
+const actionTree = photoshop.app.actionTree;
 const batchPlay = photoshop.action.batchPlay;
 const fs = uxp.storage.localFileSystem;
-const Buffer = require('buffer/').Buffer
+const st = uxp.storage;
+// https://www.adobe.io/xd/uxp/uxp/reference-js/Modules/uxp/Persistent%20File%20Storage/Folder/
+// this is not existing in the real uxp api! I really don't know what to say, why they provide such documentation?
+// const fd = uxp.storage.Folder;
+const Buffer = require('buffer/').Buffer;
 
 function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));``
 }
 
 const alert = message => {
@@ -393,6 +398,8 @@ export async function activatePaintBucket() {
 /**
  * Layer
  */
+
+ // Select layer with given name and unselect the rest
 export async function selectLayerByName(layerName){
     const layer = getLayerByName(layerName)
     const result = await batchPlay(
@@ -421,6 +428,7 @@ export async function selectLayerByName(layerName){
             }
         );            
 }
+
 export async function moveSplitHintToTop(){
     const layer = getLayerByName('split-hint');
     console.log("Move split hint layer to top")
@@ -536,23 +544,20 @@ async function showLayer(name) {
 
 }
 
+// hide all layers in current active document
 async function hideAllLayers() {
     const layers = app.activeDocument.layers;
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach
     layers.forEach(layer => {
-        const { name } = layer;
-        hideLayer(name)
+        layer.visible = false; // there is a better way to hide the layer, batchplay is not easy to use, really
     })
 }
 
+// show all layers in current active document
 async function showAllLayers() {
     const layers = app.activeDocument.layers;
     layers.forEach(layer => {
-        const { name } = layer;
-        if (name !== "line_artist_org"){
-            showLayer(name)
-        }
-       
+        layer.visible = true
     })
 }
 
@@ -644,6 +649,7 @@ async function createSplitHintLayer() {
 /**
  * File I/O
  */
+ // Todo: this seems could have a better way
 function _arrayBufferToBase64( buffer ) {
     var binary = '';
     var bytes = new Uint8Array( buffer );
@@ -655,51 +661,98 @@ function _arrayBufferToBase64( buffer ) {
 }
 
 // Open files and read their id, filename, and base64 string
-export async function readFiles() {        
+export async function readFiles() {
+    // pop up a dialog to select images 
     const files = await fs.getFileForOpening({
         allowMultiple: true,
         types: uxp.storage.fileTypes.images
     });
-
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
-    // 有意思的函数
-    const newScenes = await Promise.all(files.map(async (file) => {
-        const fileContents = await file.read({format: uxp.storage.formats.binary});
-        const base64String = _arrayBufferToBase64(fileContents)
+    // save the path of all opened files
+    // maybe useful, I don't know
+    files.forEach(async (file) => {
+        const fileName = file.name;
+        const path = file.nativePath.replace(fileName, '');
+        // const tempFolder = fs.createEntry(path + fileName, {type:st.types.folder})
+        // let token = await fs.createPersistentToken(tempFolder);
         
+        // https://www.adobe.io/xd/uxp/uxp/reference-js/Global%20Members/Data%20Storage/LocalStorage/
+        // accroding to the link above, localStorage can only stroe string
+        // why...why? orz
+        localStorage.setItem(fileName, path);
+        // localStorage.setItem(fileName + '_token', token);
+
+    })
+    
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map
+    // update all opend images into the plugin panel
+    const newScenes = await Promise.all(files.map(async (file) => {
+        // read file and convert it to base64 code
+        const fileContents = await file.read({format: uxp.storage.formats.binary});
+        const base64String = _arrayBufferToBase64(fileContents);
+        // open file in photoshop
         const doc = await app.open(file);
+        // rename and hide the opened image 
+        if (app.activeDocument.activeLayers[0].locked === true){
+            app.activeDocument.activeLayers[0].locked = false; //this is the best way to lock or unlock layer
+            app.activeDocument.activeLayers[0].name = file.name; // and rename layer
+            app.activeDocument.activeLayers[0].visible = false;
+            app.activeDocument.activeLayers[0].locked = true;
+        }
         const documentID = doc._id;
         const fileName = doc.title;
-
+        // save result to newSecne
         return {
             documentID,
             fileName,
             base64String,
-            image: base64String
+            image: base64String,
+            isFlatting: true,
         }    
     }))
+    await ensurePersistentToken();
+    // return new scene
     return newScenes;
 }
 
-// Set a folder for persistent token
-function setPersistentFolder() {
-    let entry = fs.getFolder();
-    let token = fs.createPersistentToken(entry);
+// find the temp folder token
+async function setPersistentFolder() {
+    // let's get the default temp folder, we don't need those intermediate files
+    let platform = os.platform()
+    if (platform === "darwin"){
+        let tempPath = "/tmp/";
+        navigator.clipboard.writeText({"text/plain": tempPath});
+        app.showAlert("Please indicate the temporary folder path, using 'shift + command + g' and paste the temp folder path in the open file dailog, then click 'open'.");
+    }
+    else if (platform === "win"){
+        let tempPath = "%USERPROFILE%/AppData/Local/";
+        navigator.clipboard.writeText({"text/plain": tempPath});
+        app.showAlert("Please indicate the temporary folder path, paste the temp folder path in the open file dailog and click 'open'.");   
+    }
+    else {
+        let tempPath = "/tmp/";
+        app.showAlert("Can't detect the platform type, please choose the temporary folder path manually");
+    }
+    
+    // copy the path to clipboard
+    let entry = await fs.getFolder(); 
+    let token = await fs.createPersistentToken(entry);
     localStorage.setItem("persistentFolder", token);
+    localStorage.setItem("persistentPath", entry.nativePath);
+
 }
 
-// Prompt user to create persistent token if none exists
-async function ensurePersistentToken() {
+// Prompt user to create persistent token or path if none exist
+export async function ensurePersistentToken() {
     const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
-    if (!thePersistentFolderToken) {
-        alert('You must first choose a path where you want to save temporary files.')
-        //this is a modal window, it should block everything until user select the temp folder
-        setPersistentFolder()
+    const thePersistentFolderPath = await localStorage.getItem("persistentPath");
+    if (thePersistentFolderToken === "undefined" || thePersistentFolderPath === "undefined" ||
+        thePersistentFolderToken === null || thePersistentFolderPath === null ) {
+        setPersistentFolder();
     }
 }
 
 // Get an existing file using persistent token
-// 但这些api的知识又是从哪里得知的？
 async function getExistingFile(fileName) {
     await ensurePersistentToken();
     const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
@@ -710,6 +763,7 @@ async function getExistingFile(fileName) {
 
 // Create a new file using persistent token
 async function createNewFile(fileName) {
+    // create file
     await ensurePersistentToken();
     const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
     const thePersistentFolder = await fs.getEntryForPersistentToken(thePersistentFolderToken);
@@ -719,7 +773,7 @@ async function createNewFile(fileName) {
 
 // Save a base64 string to png
 export async function saveBase64Image(data, fileName) {
-    const file = await createNewFile(fileName)
+    const file = await createNewFile(fileName);
     const buf = new Buffer(data, 'base64');
     await file.write(buf)
 }
@@ -779,57 +833,317 @@ async function saveVisibleLayer(fileName) {
     });
 }
 
-// Save the merge hint layer using "saveVisibleLayer"
+// Save the merge hint layer and clear current input in it
 export async function saveMergeHintLayer() {
-    // this function is very low efficient
-    await hideAllLayers();
-    await showMergeHintLayer();
-    await saveVisibleLayer('merge-hint.png')
-    await showAllLayers();
-    let layer = getLayerByName('merge-hint')
-    layer.delete();
-    await createLayer('merge-hint');
-    layer = getLayerByName('merge-hint')
-    await moveLayerToTop(layer._id)
+    // await hideAllLayers();
+    // await showMergeHintLayer();
+    // await saveVisibleLayer('merge-hint.png')
+    // await showAllLayers();
+
+    await saveLayerByName('merge-hint', 'merge-hint.png');
+    // clear the content in this layer
+    let layer = await cleanLayerbyName('merge-hint');
+    return layer;
 }
 
 // Save the split hint layer using "saveVisibleLayer"
 export async function saveFineSplitHintLayer() {
-    await hideAllLayers();
-    await showSplitHintLayer();
-    await saveVisibleLayer('split-hint-fine.png')
-    await showAllLayers();
-    let layer = getLayerByName('split-hint')
-    layer.delete();
-    await createLayer('split-hint');
-    layer = getLayerByName('split-hint')
-    await moveLayerToTop(layer._id)
+    // await hideAllLayers();
+    // await showSplitHintLayer();
+    // await saveVisibleLayer('split-hint-fine.png')
+    // await showAllLayers();
+
+    await saveLayerByName('split-hint', 'split-hint-fine.png');
+    // clear the content in this layer
+    let layer = await cleanLayerbyName('split-hint');
+    return layer;
 }
 
 // Save the split hint layer using "saveVisibleLayer"
 export async function saveCoarseSplitHintLayer() {
-    await hideAllLayers();
-    await showSplitHintLayer();
-    await saveVisibleLayer('split-hint-coarse.png')
-    await showAllLayers();
-    let layer = getLayerByName('split-hint')
-    layer.delete();
-    await createLayer('split-hint');
-    layer = getLayerByName('split-hint')
-    await moveLayerToTop(layer._id)
+    
+    // await hideAllLayers();
+    // await showSplitHintLayer();
+    // await saveVisibleLayer('split-hint-coarse.png')
+    // await showAllLayers();
+
+    await saveLayerByName('split-hint', 'split-hint-coarse.png');
+    // clear the content in this layer
+    let layer = await cleanLayerbyName('split-hint');
+    return layer;
 }
 
+// save the layer's content of current active document to png
+async function saveLayerByName(layerName, fileName){
+    await hideAllLayersExcept(layerName);
+    let entry = await createNewFile(fileName);
+    await app.activeDocument.save(entry);
+    await showAllLayers();
+}
+
+async function hideAllLayersExcept(layerName){
+    await hideAllLayers();
+    let currLayer = await getLayerByName(layerName);
+    currLayer.visible = true;
+}
+
+async function cleanLayerbyName(layerName, moveToTop = true){
+    let layer = getLayerByName(layerName);
+    if (layer.locked){
+        layer.selected = true; // we need to select the layer before doing any operation on it
+        layer.locked = false;
+    }
+    await layer.delete();
+    layer = await createLayer(layerName);
+    // move the layer to the top, so user's input will before everything
+    if (moveToTop){
+        await moveLayerToTop(layer._id);    
+    }
+    return layer;
+}
+
+export async function moveResultLayerBack(layerTarget){
+    let title =  app.activeDocument.title;
+    let backingLayer = getLayerByName(title);
+    await moveAboveTo(layerTarget, backingLayer);
+    backingLayer.selected = true;
+    backingLayer.visible = false;
+    backingLayer.selected = false;    
+}
+
+export async function moveSimplifiedLayerBack(layerTarget){
+    let backingLayer = getLayerByName("line_hit");
+    await moveAboveTo(layerTarget, backingLayer);  
+}
+
+export async function moveArtistLayerBack(layerTarget){
+    let backingLayer = getLayerByName("result");
+    await moveAboveTo(layerTarget, backingLayer);  
+}
+
+async function moveAboveTo(layerTarget, backingLayer){
+    backingLayer.selected = true;
+    layerTarget.selected = true;
+    backingLayer.locked = false;
+    layerTarget.locked = false;
+    layerTarget.moveAbove(backingLayer);
+    layerTarget.moveAbove();
+    backingLayer.locked = true;
+    layerTarget.locked = true;
+    backingLayer.selected = false;
+    layerTarget.selected = false;
+}
+
+////////////////////////////////////////////////////
+// working area
+export async function createLinkLayer(layerName, img){
+    // get the action name
+    // we have to do this because it is almost impossible to add image into a layer directly
+    let actionName = await localStorage.getItem("actionName");
+    let imgTemp = await localStorage.getItem("imgTemp");
+    let pathTemp = await localStorage.getItem("persistentPath");
+    if (actionName === null || actionName === "undefined" ||
+        imgTemp === null || imgTemp === "undefined"){
+        actionName = "Link to temp";
+        imgTemp = 'flatting_temp.png';
+        localStorage.setItem("actionName", actionName);
+        localStorage.setItem("imgTemp", imgTemp);
+    }
+    // find if the layer has exists already
+    let newLayer = await getLayerByName(layerName);
+    // create new layer with given name if not exsits
+    if (newLayer === false){
+        newLayer = await app.activeDocument.createLayer({name: layerName});
+        // if this is new layer, move it to the top
+        await moveLayerToTop(newLayer._id)
+    }
+    else{
+        newLayer = await cleanLayerbyName(layerName, false);
+        // if this is existing layer, move it to the right position
+        // or... do we really need to?
+    }
+    // convert to smartobject layer
+    await activeLayerToSmartobject();
+    // save image to temp PNG file
+    await saveBase64Image(img, imgTemp);
+    // find the action named "link to flatting temp"
+    let action = findActionByName(actionName);
+    if (action === null || action === undefined) {
+        // if can't find the action, then send a message to user to creat the action first
+        app.showAlert("Can't find the action, please add the flatting action to your photoshop");
+        return null;
+    }
+    action.play();
+    // rename the layer name, sometimes the action script will overwirte the layer name
+    newLayer = getLayerByName(imgTemp.replace(".png", ""));
+    newLayer.selected = true;
+    newLayer.name = layerName;
+    newLayer.locked = true;
+    newLayer.selected = false;
+    return newLayer;
+}    
+
+function findActionByName(actionName){
+    let flattingAction = actionTree.filter((a)=> a.name === "Flatting actions");
+    if (flattingAction){
+        return flattingAction[0].actions[0];
+    }
+    else{
+        return flattingAction;
+    }
+}
+
+async function activeLayerToSmartobject(){
+    let result = await batchPlay(
+    [
+       {
+          "_obj": "newPlacedLayer",
+          "_isCommand": true,
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       "modalBehavior": "fail"
+    });
+}
+
+async function linkImageToActiveLayer(fileName){
+    // get file token
+    const token = await localStorage.getItem(fileName);
+    // recorded from Alchmeist
+    let result = await batchPlay(
+    [
+       {
+          "_obj": "newPlacedLayer",
+          "_isCommand": true,
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       "modalBehavior": "fail"
+    });
+
+    result = await batchPlay(
+    [
+       {
+          "_obj": "placedLayerRelinkToFile",
+          "null": {
+             "_path": token,
+             "_kind": "local"
+          },
+          "_isCommand": true,
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       "modalBehavior": "fail"
+    });
+}
+////////////////////////////////////////////////////
+
+async function getLayerDetail(layerID, docID){
+    const result = await batchPlay(
+    [
+       {
+          "_obj": "get",
+          "_target": [
+             {
+                "_ref": "layer",
+                "_id": layerID
+             },
+             {
+                "_ref": "document",
+                "_id": docID
+             }
+          ],
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       "modalBehavior": "fail"
+    });
+
+    return result[0];
+}
+
+async function getActiveLayerDetail(){
+    const result = await batchPlay(
+    [
+       {
+          "_obj": "get",
+          "_target": [
+             {
+                "_ref": "layer",
+                "_enum": "oridinal",
+                "_value": "targetEnum",
+             },
+          ],
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       "modalBehavior": "fail"
+    });``
+    return result[0];
+}
+
+async function setActiveLayer(layerDict){
+    // this is a general way of setting layers, but it is really NOT user friendly
+    const result = await batchPlay(
+    [
+       {
+          "_obj": "set",
+          "_target": [
+             {
+                "_ref": "layer",
+                "_enum": "oridinal",
+                "_value": "targetEnum",
+             },
+          ],
+          "to":{
+            "_obj": "layer",
+            /* 
+            add thing that you want to setup here
+            But it will usually failed
+            */
+            },
+          "_isCommand": true,
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       "modalBehavior": "fail"
+    });
+}
+
+/*
+Old fucntions for loading images into layers
+These functions work but are quite slow
+We will deprecate these in the future
+*/
 async function openInLayer(fileName, layerName) {
     const file = await getExistingFile(fileName)
 
     const mainDocument = app.activeDocument;
     await app.open(file);
 
-    // why there have two variable with the same value?
-    // no there are different after open a new file
+    // after opend file in the app, there is a new doc
+    // so the active document now has changed to this new one
     const tempDocument = app.activeDocument;
 
-    // why do this?
+    // then duplicate this new layer back to the main document
     await renameActiveLayer(layerName);
     await tempDocument.layers[0].duplicate(mainDocument);
     await tempDocument.closeWithoutSaving();
@@ -837,35 +1151,6 @@ async function openInLayer(fileName, layerName) {
 
     app.activeDocument = mainDocument;
 }
-
-
-export async function unlockLayer(documentID){
-    // is const result = really necessary?
-    console.log("unlock background layer...");
-    
-    const result = await batchPlay(
-    [
-       {
-          "_obj": "historyStateChanged",
-          "documentID": documentID,
-          //"ID": 943, //这个id有啥用？
-          "name": "Make Layer",
-          "hasEnglish": true,
-          "_isCommand": false,
-          "_options": {
-             "dialogOptions": "dontDisplay"
-          }
-       }
-    ],{
-       "synchronousExecution": false,
-       //"modalBehavior": "fail"
-    });
-    
-    await renameActiveLayer("line_artist_org");
-    await hideLayer("line_artist_org");
-}
-
-
 
 // Load result into a new layer
 export async function loadResult(baseName, move) {
@@ -882,18 +1167,14 @@ export async function loadResult(baseName, move) {
     if (move){
         const layer = getLayerByName('result')
         await moveLayerToBottom(layer._id)    
-    }
-    
+    }  
 }
 
-export async function loadLineArtist(baseName, move) {
-    // Delete if already exists
-    console.log('loading artist line')
+export async function loadLineArtist(baseName, move) {    
     const artistLayer = getLayerByName('line_artist')
     if (artistLayer) {
         artistLayer.delete();
     }
-
     // Load image into layer
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals
     // template literals
@@ -907,18 +1188,16 @@ export async function loadLineArtist(baseName, move) {
 // Load line_simplified into a new layer
 export async function loadLineHint(baseName, move) {
     // Delete if already exists
-    const lineSimplifiedLayer = getLayerByName('line_hint')
-    if (lineSimplifiedLayer) {
-        lineSimplifiedLayer.delete()
+    const lineHintLayer = getLayerByName('line_hint')
+    if (lineHintLayer) {
+        lineHintLayer.delete()
     }
-
     // Load image into layer
     await openInLayer(`${baseName}-line_hint.png`, 'line_hint')
     if (move){
         const layer = getLayerByName('line_hint')
         await moveLayerToTop(layer._id)
     }
-    
 }
 
 // Load line_simplified into a new layer
@@ -934,8 +1213,7 @@ export async function loadLineSimplified(baseName, move) {
     if (move){
         const layer = getLayerByName('line_simplified')
         await moveLayerToTop(layer._id)
-    }
-    
+    }    
 }
 
 export async function loadLayer(fileName, layerName) {
@@ -944,13 +1222,13 @@ export async function loadLayer(fileName, layerName) {
     if (layer) {
         layer.delete()
     }
-
     // Load image into layer
     await openInLayer(fileName, layerName)
     layer = getLayerByName(layerName)
     await moveLayerToBottom(layer._id)
 }
 
+// generate the array of layer names
 function getLayerNames(numLayers) {
     const layers = [...Array(numLayers).keys()]
     const layerNames = []
@@ -1039,17 +1317,13 @@ export async function loadLayers(baseName, numLayers) {
     })
 
     await groupLayers()
-
 }
 
 // This fails a lot when # of images gets big, deprecated
-// 好吧这就是他为什么不载入layer的原因
 async function loadLayersBatch(baseName, numLayers) {
     deleteLayers(layerNames)
-
     console.log('opening layers...')
     await openLayers(baseName, numLayers)
-
     console.log('waiting 10 sec...')
     setTimeout(async() => {
         console.log('start copying!')

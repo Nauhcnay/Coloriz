@@ -33,6 +33,7 @@
     "antd": "^4.14.0",
     "btoa": "^1.2.1",
     "buffer": "^6.0.3",
+    "copy-image-clipboard": "^1.0.1",
     "cross-env": "^7.0.2",
     "hex-to-hsl": "^1.0.2",
     "path": "^0.12.7",

@@ -27,11 +27,13 @@ import {
     loadLineArtist,
     moveSplitHintToTop,
     selectLayerByName,
-    loadLineHint
+    loadLineHint,
+    createLinkLayer,
+    moveResultLayerBack, 
+    moveSimplifiedLayerBack,
+    moveArtistLayerBack,
 } from '../functions';
 
-// where these model come from?
-// I guess they are all from node.js
 import { Modal } from 'antd';
 import { ThemeProvider, createMuiTheme } from '@material-ui/core/styles';
 import CssBaseline from '@material-ui/core/CssBaseline';
@@ -53,9 +55,13 @@ import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
 import Scenes from "../components/Scenes.jsx";
 
-// seems to be a entrance of using photo
-const app = photoshop.app;
+/*
+local variables
+*/
+// uxp photoshop api entrance
+const app = photoshop.app
 
+// theme 
 const theme = createMuiTheme({
     palette: {
         type: "dark",
@@ -65,8 +71,6 @@ const theme = createMuiTheme({
 });
 
 // https://www.w3schools.com/js/js_arrow_function.asp
-// pass a call back function to maskeStyles
-// but what the const variable used for?
 const useStyles = makeStyles((theme) => ({
     root: {
       minWidth: 240,
@@ -85,9 +89,10 @@ const useStyles = makeStyles((theme) => ({
     }
 }));
 
-// then what this does? what dose with styles returned?
-// ah, a function, so again props is a callback function right?
-// this seems like insert a code block into the html page frame
+// Panle componments
+// need to find the doc of withStyles
+// seems like a function to warp the style definition into a html element (or an React componment)
+// ToDO: replace these to the UXP UI componments
 const RedRadio = withStyles({
     root: {
       color: red[400],
@@ -97,9 +102,6 @@ const RedRadio = withStyles({
       },
     },
     checked: {},
-    // but what this means?
-    // is this html code or ccs code?
-    // is it ok to 
 })((props) => <Radio color="default" {...props} />);
 
 const YellowRadio = withStyles({
@@ -124,11 +126,7 @@ const BluewRadio = withStyles({
     checked: {},
 })((props) => <Radio color="default" {...props} />);
 
-
-// Ah I see, so this is the button for both split and merge
 const StateFulButton = (props) => (
-    // what this code block is?
-    // is that html?
     <Button style={{width: '80%', height: 30 }}
         variant="contained"
         disabled={props.isLoading}
@@ -137,7 +135,11 @@ const StateFulButton = (props) => (
     </Button>
 );
 
-// then what this function does?
+/*
+Main framework
+*/
+// main function which constructe the panel
+// why put everthing into a function? not a class?
 function Panel() {
     const classes = useStyles();
     const [scenes, setScenes] = useState([]);
@@ -162,7 +164,6 @@ function Panel() {
     const mergeInstructionText = 'Brush over different segments that need to be merged. When ready, click Merge.'
     const splitInstructionText = 'Connect unconnected green lines where you with to split. When ready, click Split.'    
 
-    // so this inline function could also be so complex?
     useEffect(() => {
         if (brushMode === 'merge') {
             handleMergeToolClick(mergeBrushSize)
@@ -234,11 +235,77 @@ function Panel() {
         }
         setIsSplitting(false)
     }
+    async function flatSingleBackground(scene){
+        // read data from selected input
+        // const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
+        const { fileName, documentID, base64String } = scene;
+        
+        // convert readed data to the input format of API
+        const data = {
+            image: base64String,
+            net: 512,
+            radius: 1,
+            preview: false
+        }
+
+        // construct the server API entrance
+        // Todo: make this apprea on the panel, let is editable
+        const url = 'http://68.100.80.232:8080/flatsingle'
+
+        // get return result
+        const response = await fetch(url, {
+            method: 'POST', 
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        const result = await response.json();
+        const { line_artist, line_simplified, image, fillmap, fillmap_c, palette, line_hint } = result;
+        console.log('Flatting done!')
+
+        const newScenes = scenes.map(scene => {
+            if (scene.documentID === documentID) {
+                return {
+                    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Spread_syntax
+                    // spread syntax
+                    ...scene,
+                    line_artist,
+                    line_simplified,
+                    image,
+                    fillmap,
+                    fillmap_artist: fillmap_c,
+                    palette
+                }
+            }
+            // so if the ID is differnet, then just return the same scene (nonthing changed)
+            return scene;
+        })
+        setScenes(newScenes);
+
+        return result;
+    }
+    async function flatAllBackground(){
+        // flat all images in the opened scenes
+        var i;
+        for (i = 0; i < scenes.length; i++){
+            console.log('Flatting image: ' + scenes[i].fileName);
+            try{
+                let result = await flatSingleBackground(scenes[i]); 
+                // if flatting is success, then 
+            }
+            catch (e){
+                console.log(e);
+                scenes[i].isFlatting = false;
+            }
+        }
+        
+        
+        
+    }
 
     async function flatSingle() {
         console.log('Flatting image...')
-        
-        // I guess this is for multi input? so each scene represents one input opened in the photoshop
         
         // read data from selected input
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
@@ -251,6 +318,9 @@ function Panel() {
             radius: 1,
             preview: false
         }
+
+        // construct the server API entrance
+        // Todo: make this apprea on the panel, let is editable
         const url = 'http://68.100.80.232:8080/flatsingle'
 
         // get return result
@@ -261,25 +331,45 @@ function Panel() {
             },
             body: JSON.stringify(data)
         })
-        
         const result = await response.json();
         const { line_artist, line_simplified, image, fillmap, fillmap_c, palette, line_hint } = result;
-
         console.log('Flatting done!')
         
-        console.log('Saving images...')
-        await saveBase64Image(image, `${fileName}-result.png`)
-        await saveBase64Image(line_artist, `${fileName}-line_artist.png`) 
-        await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
-        await saveBase64Image(line_hint, `${fileName}-line_hint.png`) 
-        
-        console.log('Loading images....')
-        await unlockLayer(documentID);
-        await loadLineArtist(fileName, true)
-        await loadResult(fileName, true)
-        await loadLineHint(fileName, true)
-        await loadLineSimplified(fileName, true)
+        console.log('Loading result');
+        if (await createLinkLayer("result", image) === null){
+            return null;
+        }
+        console.log('Loading line art');
+        if (await createLinkLayer("line_artist", line_artist) === null){
+            return null;
+        }
+        console.log('Loading line hint');
+        if (await createLinkLayer("line_hit", line_hint) === null){
+            return null;
+        }
+        console.log('Loading line simple');
+        if (await createLinkLayer("line_simplified", line_simplified) === null){
+            return null;
+        }
 
+        /*
+        Old loading codes, work but slow, will be deprecated in the future
+        */
+        // // save result and display them in photoshop
+        // console.log('Saving images...')
+        // await saveBase64Image(image, `${fileName}-result.png`)
+        // await saveBase64Image(line_artist, `${fileName}-line_artist.png`) 
+        // await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
+        // await saveBase64Image(line_hint, `${fileName}-line_hint.png`) 
+        
+        // // Todo: change these steps to linked layers, hope that could be faster
+        // console.log('Loading images....')
+        // await loadLineArtist(fileName, true)
+        // await loadResult(fileName, true)
+        // await loadLineHint(fileName, true)
+        // await loadLineSimplified(fileName, true)
+
+        // Todo: remove the using of fillmap, by doing that we can get the ability of undo and redo
         const newScenes = scenes.map(scene => {
             if (scene.documentID === documentID) {
                 return {
@@ -301,14 +391,18 @@ function Panel() {
         console.log('scenes saved in React state')
     }
 
+    // Todo: try to add different brush color support
+    // But put this task later, this is not important now
     async function merge() {
         console.log('Merging...')
+        // select the active document
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
         const { fileName } = scene;
         
-        await saveMergeHintLayer();
+        // read the user input
+        let mergeLayer = await saveMergeHintLayer();
         const stroke = await loadBase64('merge-hint.png')
-        
+        // construct the merge input 
         const data = {
             line_artist: scene.line_artist,
             fillmap: scene.fillmap,
@@ -316,6 +410,7 @@ function Panel() {
             palette: scene.palette,
         }
         const url = 'http://68.100.80.232:8080/merge'
+        // send to backend for merge
         console.log('sending request...')
         const response = await fetch(url, {
             method: 'POST', 
@@ -324,29 +419,40 @@ function Panel() {
             },
             body: JSON.stringify(data)
         })
-                
+        // get result 
         const result = await response.json();
         const { line_simplified, image, fillmap, layers, palette } = result;
-
         console.log('Merging done!')
 
-        console.log('Saving images...')
-        await saveBase64Image(image, `${fileName}-result.png`)
-        await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
-        
+        console.log('Loading result');
+        let newLayer = await createLinkLayer("result", image);
+        if (newLayer === null){
+            return null;
+        }
+        await moveResultLayerBack(newLayer);
+
+        console.log('Loading line simplified');
+        newLayer = await createLinkLayer("line_simplified", line_simplified);
+        if (newLayer === null){
+            return null;
+        }
+        await moveSimplifiedLayerBack(newLayer);
+        mergeLayer.selected = true;
+        /*
+        Old codes
+        */
+        // console.log('Saving images...')
+        // await saveBase64Image(image, `${fileName}-result.png`)
+        // await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
         // layers.forEach(async(layer, index) => {
         //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
         // })
 
         
-        console.log('Loading images....')
-        await loadResult(fileName, true)          
-        await loadLineSimplified(fileName, true)
-        await selectLayerByName("merge-hint")
-
-        console.log('Cleanup merge strokes...')
-
-
+        // console.log('Loading images....')
+        // await loadResult(fileName, true)          
+        // await loadLineSimplified(fileName, true)
+        // await selectLayerByName("merge-hint")
                 
         const newScenes = scenes.map(scene => {
             if (scene.documentID === app.activeDocument._id) {
@@ -355,14 +461,12 @@ function Panel() {
                     fillmap,
                     palette,
                     image,
-                    // layers
                 }
             }
             return scene
         })
         setScenes(newScenes)
         console.log('scenes saved in React state')
-
     }
 
     async function splitcoarse() {
@@ -370,7 +474,7 @@ function Panel() {
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
         const { fileName } = scene;
         
-        await saveCoarseSplitHintLayer();
+        let splitLayer = await saveCoarseSplitHintLayer();
         const stroke = await loadBase64('split-hint-coarse.png')
         
         const data = {
@@ -400,20 +504,35 @@ function Panel() {
         const { line_simplified, image, fillmap, layers, palette } = result;
         console.log('Splitting done!')
 
-        
-        console.log('Saving images...')
-        await saveBase64Image(image, `${fileName}-result.png`)
-        await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`)
+        console.log('Loading result');
+        let newLayer = await createLinkLayer("result", image);
+        if (newLayer === null){
+            return null;
+        }
+        await moveResultLayerBack(newLayer);
 
-        //最好之后把这步跳过去
+        console.log('Loading line simplified');
+        newLayer = await createLinkLayer("line_simplified", line_simplified);
+        if (newLayer === null){
+            return null;
+        }
+        await moveSimplifiedLayerBack(newLayer);
+
+        splitLayer.selected = true;
+        /*
+        Old codes
+        */
+        // console.log('Saving images...')
+        // await saveBase64Image(image, `${fileName}-result.png`)
+        // await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`)
         // layers.forEach(async(layer, index) => {
         //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
         // })
         
-        console.log('Loading image....')
-        await loadResult(fileName, true)
-        await loadLineSimplified(fileName, true)
-        await selectLayerByName('split-hint')
+        // console.log('Loading image....')
+        // await loadResult(fileName, true)
+        // await loadLineSimplified(fileName, true)
+        // await selectLayerByName('split-hint')
 
         const newScenes = scenes.map(scene => {
             if (scene.documentID === app.activeDocument._id) {
@@ -438,7 +557,7 @@ function Panel() {
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0];
         const { fileName } = scene;
         
-        await saveFineSplitHintLayer();
+        let splitLayer = await saveFineSplitHintLayer();
         const stroke = await loadBase64('split-hint-fine.png');
         
         const data = {
@@ -466,35 +585,49 @@ function Panel() {
         const result = await response.json();
         console.log('got result');
         console.log(result);
-
-        // 读取回复，并显示
         const { line_artist, line_simplified, image, fillmap, layers, palette } = result;
         console.log('Splitting done!');
 
-        
-        console.log('Saving images...');
-        await saveBase64Image(image, `${fileName}-result.png`);
-        await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`);
-        await saveBase64Image(line_artist, `${fileName}-line_artist.png`)
-        
+        console.log('Loading result');
+        let newLayer = await createLinkLayer("result", image);
+        if (newLayer === null){
+            return null;
+        }
+        await moveResultLayerBack(newLayer);
 
-        // // we really don't need to save layers everytime, then we can save lots of time
+        console.log('Loading line artist');
+        newLayer = await createLinkLayer("line_artist", line_artist);
+        if (newLayer === null){
+            return null;
+        }
+        await moveArtistLayerBack(newLayer);
+
+        console.log('Loading line simplified');
+        newLayer = await createLinkLayer("line_simplified", line_simplified);
+        if (newLayer === null){
+            return null;
+        }
+        await moveSimplifiedLayerBack(newLayer);
+
+        splitLayer.selected = true;
+        /*
+        Old way of loading layers 
+        */
+        // console.log('Saving images...');
+        // await saveBase64Image(image, `${fileName}-result.png`);
+        // await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`);
+        // await saveBase64Image(line_artist, `${fileName}-line_artist.png`)
         // layers.forEach(async(layer, index) => {
         //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
         // });
         
-        console.log('Loading image....');
-        // 这里应该增加一个函数
-        // 去除输入的锁定，并且重命名整个layer
-        // 还需要再入服务器端返回的增加了alhpha通道的line art
-        await loadLineArtist(fileName, true);
-        await loadResult(fileName, true);
-        await loadLineSimplified(fileName, true); 
-        await selectLayerByName('split-hint')
+        // console.log('Loading image....');
+        // await loadLineArtist(fileName, true);
+        // await loadResult(fileName, true);
+        // await loadLineSimplified(fileName, true); 
+        // await selectLayerByName('split-hint')
 
-        // 重设ps中的显示内容，这部分又是和ps打交道，因此需要额外的控制接口
-        // 也是我应该尽快搞懂的内容
-        // 
+        // set results to scenes in React, so it can update the UI correspondingly
         const newScenes = scenes.map(scene => {
             if (scene.documentID === app.activeDocument._id) {
                 return {
@@ -525,7 +658,9 @@ function Panel() {
 
     async function loadNewScenes() {
         const newScenes = await readFiles();
-        setScenes([...scenes, ...newScenes])
+        setScenes([...scenes, ...newScenes]);
+        // flat all results at the background
+
     }
 
     // what this function does?
@@ -560,12 +695,10 @@ function Panel() {
                 return SplitButtonCoarse; 
             }}
 
-    const FlattingTab = (
-       
+    const FlattingTab = (      
         //https://www.reactenlightenment.com/react-jsx/5.1.html
         // JSX allows us to put HTML into JavaScript.
-        // https://reactjs.org/docs/introducing-jsx.html
-        
+        // https://reactjs.org/docs/introducing-jsx.html 
         <>
             <Grid item xs={12} style={{ height: 40, display: 'flex', justifyContent: 'center'}}>
                 { FlatButton }
@@ -775,7 +908,7 @@ function Panel() {
         </>
     )
 
-    
+    // the code that construct the panel
     return (
         <Grid container className={classes.root}>
             <Grid item xs={5} className={classes.scenes}>
