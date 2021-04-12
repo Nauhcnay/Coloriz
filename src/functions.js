@@ -707,7 +707,7 @@ export async function readFiles() {
             fileName,
             base64String,
             image: base64String,
-            isFlatting: true,
+            flatted: false,
         }    
     }))
     await ensurePersistentToken();

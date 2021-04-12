@@ -126,7 +126,7 @@ const BluewRadio = withStyles({
     checked: {},
 })((props) => <Radio color="default" {...props} />);
 
-const StateFulButton = (props) => (
+const TwoStateButton = (props) => (
     <Button style={{width: '80%', height: 30 }}
         variant="contained"
         disabled={props.isLoading}
@@ -135,12 +135,24 @@ const StateFulButton = (props) => (
     </Button>
 );
 
+const ThreeStateButton = (props) => (
+    <Button style={{width: '80%', height: 30 }}
+        variant="contained"
+        disabled={props.isLoading === 0 ? true : false}
+        onClick={props.onClick}>
+        {props.isLoading === 1 ? "Flat" : "Show flatted"}
+    </Button>
+);
+
+
 /*
 Main framework
 */
 // main function which constructe the panel
 // why put everthing into a function? not a class?
 function Panel() {
+    var StartFlatting = false;
+    const setFlatting = (set)=> StartFlatting = set;
     const classes = useStyles();
     const [scenes, setScenes] = useState([]);
     const [activeScene, setActiveScene] = useState(0);
@@ -152,7 +164,7 @@ function Panel() {
 
     const [isMerging, setIsMerging] = useState(false);
     const [isSplitting, setIsSplitting] = useState(false);
-    const [isFlatting, setIsFlatting] = useState(false);
+    const [isFlatting, setIsFlatting] = useState(1);
 
     const [brushMode, setBrushMode] = useState('merge');
     const handleBrushModeChange = (event) => {
@@ -187,20 +199,50 @@ function Panel() {
         </FormControl>
     )
 
-    const MergeButton = <StateFulButton onClick={tryMerge} text="Merge" isLoading={isMerging}/>
-    const SplitButtonFine = <StateFulButton onClick={trySplitFine} text="Fine Split" isLoading={isSplitting}/>
-    const SplitButtonCoarse = <StateFulButton onClick={trySplitCoarse} text="Coarse Split" isLoading={isSplitting}/>
-    const FlatButton = <StateFulButton onClick={tryFlat} text="Flat" isLoading={isFlatting}/>
+    const MergeButton = <TwoStateButton onClick={tryMerge} text="Merge" isLoading={isMerging}/>
+    const SplitButtonFine = <TwoStateButton onClick={trySplitFine} text="Fine Split" isLoading={isSplitting}/>
+    const SplitButtonCoarse = <TwoStateButton onClick={trySplitCoarse} text="Coarse Split" isLoading={isSplitting}/>
+    const FlatButton = <ThreeStateButton onClick={tryFlat} isLoading={isFlatting}/>
+
 
     async function tryFlat() {
-        setIsFlatting(true)
-        try {
-            await flatSingle()
+        if (isFlatting === 1){
+            let updatedScenes = scenes;
+            setIsFlatting(0);
+            console.log("Flatting all loaded images...");
+            // await flatAllBackground(scenes);    
+            // flat all images in the opened scenes
+            setFlatting(true);
+            var i;
+            for (i = 0; i < updatedScenes.length; i++){
+                console.log('Flatting image: ' + updatedScenes[i].fileName);
+                try{
+                    if (updatedScenes[i].flatted === false){
+                        updatedScenes = await flatSingleBackground(i, updatedScenes);
+                        setScenes(updatedScenes);
+                        if (app.activeDocument._id == updatedScenes[i].documentID){
+                            setIsFlatting(2);
+                        }
+                    }
+                    continue;
+                }
+                catch (e){
+                    console.log(e);
+                }
+            }
+            setFlatting(false);
         }
-        catch (e) {
-            console.log(e)
+        else if (isFlatting === 2){
+            setIsFlatting(0)
+            console.log("Display current flatting result...")
+            try {
+                await flatSingle()
+            }
+            catch (e) {
+                console.log(e)
+            }
+            setIsFlatting(2)
         }
-        setIsFlatting(false)
     }
 
     async function tryMerge() {
@@ -235,10 +277,10 @@ function Panel() {
         }
         setIsSplitting(false)
     }
-    async function flatSingleBackground(scene){
+    async function flatSingleBackground(index, updatedScenes){
         // read data from selected input
         // const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
-        const { fileName, documentID, base64String } = scene;
+        const { fileName, documentID, base64String } = updatedScenes[index];
         
         // convert readed data to the input format of API
         const data = {
@@ -264,7 +306,7 @@ function Panel() {
         const { line_artist, line_simplified, image, fillmap, fillmap_c, palette, line_hint } = result;
         console.log('Flatting done!')
 
-        const newScenes = scenes.map(scene => {
+        const newScenes = updatedScenes.map(scene => {
             if (scene.documentID === documentID) {
                 return {
                     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Spread_syntax
@@ -275,120 +317,64 @@ function Panel() {
                     image,
                     fillmap,
                     fillmap_artist: fillmap_c,
-                    palette
+                    line_hint,
+                    palette,
+                    flatted: true,
                 }
             }
-            // so if the ID is differnet, then just return the same scene (nonthing changed)
+            
             return scene;
-        })
-        setScenes(newScenes);
-
-        return result;
+        })  
+        return newScenes;
     }
-    async function flatAllBackground(){
+
+    async function flatAllBackground(newScenes){
         // flat all images in the opened scenes
         var i;
-        for (i = 0; i < scenes.length; i++){
-            console.log('Flatting image: ' + scenes[i].fileName);
+        for (i = 0; i < newScenes.length; i++){
+            console.log('Flatting image: ' + newScenes[i].fileName);
             try{
-                let result = await flatSingleBackground(scenes[i]); 
-                // if flatting is success, then 
+                if (newScenes[i].flatted === false){
+                    let updatedScenes = await flatSingleBackground(newScenes[i]);
+                    setScenes(updatedScenes);
+                }
+                continue;
             }
             catch (e){
                 console.log(e);
-                scenes[i].isFlatting = false;
             }
         }
-        
-        
         
     }
 
     async function flatSingle() {
-        console.log('Flatting image...')
-        
+        console.log('loading flatting results...')
         // read data from selected input
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
-        const { fileName, documentID, base64String } = scene;
-        
-        // convert readed data to the input format of API
-        const data = {
-            image: base64String,
-            net: 512,
-            radius: 1,
-            preview: false
-        }
-
-        // construct the server API entrance
-        // Todo: make this apprea on the panel, let is editable
-        const url = 'http://68.100.80.232:8080/flatsingle'
-
-        // get return result
-        const response = await fetch(url, {
-            method: 'POST', 
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        })
-        const result = await response.json();
-        const { line_artist, line_simplified, image, fillmap, fillmap_c, palette, line_hint } = result;
-        console.log('Flatting done!')
-        
-        console.log('Loading result');
-        if (await createLinkLayer("result", image) === null){
-            return null;
-        }
-        console.log('Loading line art');
-        if (await createLinkLayer("line_artist", line_artist) === null){
-            return null;
-        }
-        console.log('Loading line hint');
-        if (await createLinkLayer("line_hit", line_hint) === null){
-            return null;
-        }
-        console.log('Loading line simple');
-        if (await createLinkLayer("line_simplified", line_simplified) === null){
-            return null;
-        }
-
-        /*
-        Old loading codes, work but slow, will be deprecated in the future
-        */
-        // // save result and display them in photoshop
-        // console.log('Saving images...')
-        // await saveBase64Image(image, `${fileName}-result.png`)
-        // await saveBase64Image(line_artist, `${fileName}-line_artist.png`) 
-        // await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
-        // await saveBase64Image(line_hint, `${fileName}-line_hint.png`) 
-        
-        // // Todo: change these steps to linked layers, hope that could be faster
-        // console.log('Loading images....')
-        // await loadLineArtist(fileName, true)
-        // await loadResult(fileName, true)
-        // await loadLineHint(fileName, true)
-        // await loadLineSimplified(fileName, true)
-
-        // Todo: remove the using of fillmap, by doing that we can get the ability of undo and redo
-        const newScenes = scenes.map(scene => {
-            if (scene.documentID === documentID) {
-                return {
-                    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Spread_syntax
-                    // spread syntax
-                    ...scene,
-                    line_artist,
-                    line_simplified,
-                    image,
-                    fillmap,
-                    fillmap_artist: fillmap_c,
-                    palette
-                }
+        try{
+            const { line_artist, line_simplified, image, fillmap, fillmap_c, palette, line_hint } = scene;
+            console.log('Flatting done!')
+            
+            console.log('Loading result');
+            if (await createLinkLayer("result", image) === null){
+                return null;
             }
-            // so if the ID is differnet, then just return the same scene (nonthing changed)
-            return scene
-        })
-        setScenes(newScenes)
-        console.log('scenes saved in React state')
+            console.log('Loading line art');
+            if (await createLinkLayer("line_artist", line_artist) === null){
+                return null;
+            }
+            console.log('Loading line hint');
+            if (await createLinkLayer("line_hit", line_hint) === null){
+                return null;
+            }
+            console.log('Loading line simple');
+            if (await createLinkLayer("line_simplified", line_simplified) === null){
+                return null;
+            }
+        }
+        catch (e){
+            app.showAlert("Flatting error, please reload this image to retry")
+        }    
     }
 
     // Todo: try to add different brush color support
@@ -659,12 +645,10 @@ function Panel() {
     async function loadNewScenes() {
         const newScenes = await readFiles();
         setScenes([...scenes, ...newScenes]);
-        // flat all results at the background
-
+        setIsFlatting(1);
+        StartFlatting = false;
     }
 
-    // what this function does?
-    // I really don't understand why don't just declar a function?
     const listener = (event, descriptor) => {
         if (event === 'close') {
             const { documentID } = descriptor
@@ -860,7 +844,7 @@ function Panel() {
     
     
     // TODO: try to make this function connect to API, or just remove this function
-    const LoadSegmentsButton = <StateFulButton onClick={loadSegments} text="Load Segments" isLoading={false}/>
+    const LoadSegmentsButton = <twoStateButton onClick={loadSegments} text="Load Segments" isLoading={false}/>
     const ColoringTab = (
         <>
             <Grid item xs={12}>
@@ -912,7 +896,11 @@ function Panel() {
     return (
         <Grid container className={classes.root}>
             <Grid item xs={5} className={classes.scenes}>
-                <Scenes scenes={scenes} activeScene={activeScene} setActiveScene={setActiveScene}/>
+                <Scenes scenes={scenes}
+                        activeScene={activeScene}
+                        setActiveScene={setActiveScene}
+                        setIsFlatting={setIsFlatting}
+                        startFlatting={StartFlatting}/>
                 <Button onClick={loadNewScenes}>+ Add More Scenes...</Button>
             </Grid>
 
