@@ -29,15 +29,15 @@ function Scene({ fileName, id, image, activeScene, setActiveScene, setIsFlatting
         app.activeDocument = activeDoc;
         setActiveScene(id);
         if (flatted){
-            setIsFlatting(2);
+            setIsFlatting(2); //set button to "show flatted"
             // console.log("case 1");
         }
-        else if (startFlatting && flatted === false){
-            setIsFlatting(0);
+        else if (startFlatting() && flatted === false){
+            setIsFlatting(0); // set button to "show flatted" and disable it
             // console.log("case 2");
         }
         else{
-            setIsFlatting(1)
+            setIsFlatting(1) // set button to "flat"
         }
     }
 

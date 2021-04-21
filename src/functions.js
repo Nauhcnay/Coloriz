@@ -846,6 +846,19 @@ export async function saveMergeHintLayer() {
     return layer;
 }
 
+export async function saveLineArtistLayer() {
+    await saveLayerByName('line_artist', 'line-artist.png');
+}
+
+export async function saveFillNeuralLayer() {
+    await saveLayerByName('fill_neural', 'fill-neural.png');
+}
+
+
+// export async function saveResultLayer() {
+//     await saveLayerByName('result', 'result.png');
+// }
+
 // Save the split hint layer using "saveVisibleLayer"
 export async function saveFineSplitHintLayer() {
     // await hideAllLayers();
@@ -903,16 +916,12 @@ async function cleanLayerbyName(layerName, moveToTop = true){
 }
 
 export async function moveResultLayerBack(layerTarget){
-    let title =  app.activeDocument.title;
-    let backingLayer = getLayerByName(title);
-    await moveAboveTo(layerTarget, backingLayer);
-    backingLayer.selected = true;
-    backingLayer.visible = false;
-    backingLayer.selected = false;    
+    let backingLayer = getLayerByName("line_artist");
+    await moveBelowTo(layerTarget, backingLayer);   
 }
 
 export async function moveSimplifiedLayerBack(layerTarget){
-    let backingLayer = getLayerByName("line_hit");
+    let backingLayer = getLayerByName("line_hint");
     await moveAboveTo(layerTarget, backingLayer);  
 }
 
@@ -934,6 +943,18 @@ async function moveAboveTo(layerTarget, backingLayer){
     layerTarget.selected = false;
 }
 
+async function moveBelowTo(layerTarget, frontLayer){
+    frontLayer.selected = true;
+    layerTarget.selected = true;
+    frontLayer.locked = false;
+    layerTarget.locked = false;
+    layerTarget.moveBelow(frontLayer);
+    // layerTarget.moveBelow();
+    frontLayer.locked = true;
+    layerTarget.locked = true;
+    frontLayer.selected = false;
+    layerTarget.selected = false;
+}
 ////////////////////////////////////////////////////
 // working area
 export async function createLinkLayer(layerName, img){

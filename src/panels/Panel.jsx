@@ -32,6 +32,8 @@ import {
     moveResultLayerBack, 
     moveSimplifiedLayerBack,
     moveArtistLayerBack,
+    saveLineArtistLayer,
+    saveFillNeuralLayer
 } from '../functions';
 
 import { Modal } from 'antd';
@@ -150,13 +152,16 @@ Main framework
 */
 // main function which constructe the panel
 // why put everthing into a function? not a class?
+var StartFlatting = false;
+var scenesGlobal;
+const getScenes = ()=>scenesGlobal;
 function Panel() {
-    var StartFlatting = false;
+    const getFlatting = ()=> StartFlatting; // we have the pass the function instead of variable
     const setFlatting = (set)=> StartFlatting = set;
     const classes = useStyles();
     const [scenes, setScenes] = useState([]);
+    scenesGlobal = scenes;
     const [activeScene, setActiveScene] = useState(0);
-
     const [tab, setTab] = useState(0);
     const handleTabChange = (event, newValue) => {
         setTab(newValue);
@@ -220,6 +225,7 @@ function Panel() {
                     if (updatedScenes[i].flatted === false){
                         updatedScenes = await flatSingleBackground(i, updatedScenes);
                         setScenes(updatedScenes);
+                        scenesGlobal = updatedScenes;
                         if (app.activeDocument._id == updatedScenes[i].documentID){
                             setIsFlatting(2);
                         }
@@ -228,10 +234,12 @@ function Panel() {
                 }
                 catch (e){
                     console.log(e);
+                    setFlatting(false);
                 }
             }
             setFlatting(false);
         }
+        // what this branch does?
         else if (isFlatting === 2){
             setIsFlatting(0)
             console.log("Display current flatting result...")
@@ -303,7 +311,7 @@ function Panel() {
             body: JSON.stringify(data)
         })
         const result = await response.json();
-        const { line_artist, line_simplified, image, fillmap, fillmap_c, palette, line_hint } = result;
+        const { line_artist, line_simplified, image, line_hint, fill_artist } = result;
         console.log('Flatting done!')
 
         const newScenes = updatedScenes.map(scene => {
@@ -315,10 +323,8 @@ function Panel() {
                     line_artist,
                     line_simplified,
                     image,
-                    fillmap,
-                    fillmap_artist: fillmap_c,
+                    fill_artist,
                     line_hint,
-                    palette,
                     flatted: true,
                 }
             }
@@ -352,11 +358,11 @@ function Panel() {
         // read data from selected input
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
         try{
-            const { line_artist, line_simplified, image, fillmap, fillmap_c, palette, line_hint } = scene;
+            const { line_artist, line_simplified, image, line_hint } = scene;
             console.log('Flatting done!')
             
             console.log('Loading result');
-            if (await createLinkLayer("result", image) === null){
+            if (await createLinkLayer("fill_neural", image) === null){
                 return null;
             }
             console.log('Loading line art');
@@ -364,7 +370,7 @@ function Panel() {
                 return null;
             }
             console.log('Loading line hint');
-            if (await createLinkLayer("line_hit", line_hint) === null){
+            if (await createLinkLayer("line_hint", line_hint) === null){
                 return null;
             }
             console.log('Loading line simple');
@@ -387,13 +393,21 @@ function Panel() {
         
         // read the user input
         let mergeLayer = await saveMergeHintLayer();
-        const stroke = await loadBase64('merge-hint.png')
+        const stroke = await loadBase64('merge-hint.png');
+
+        // load the fill results
+        await saveFillNeuralLayer();
+        const fill_neural = await loadBase64('fill-neural.png');
+        
+        await saveLineArtistLayer();
+        const line_artist = await loadBase64('line-artist.png');
+
         // construct the merge input 
         const data = {
-            line_artist: scene.line_artist,
-            fillmap: scene.fillmap,
+            line_artist: line_artist,
+            fill_neural: fill_neural,
+            fill_artist: scene.fill_artist,
             stroke,
-            palette: scene.palette,
         }
         const url = 'http://68.100.80.232:8080/merge'
         // send to backend for merge
@@ -407,11 +421,11 @@ function Panel() {
         })
         // get result 
         const result = await response.json();
-        const { line_simplified, image, fillmap, layers, palette } = result;
+        const { line_simplified, image} = result;
         console.log('Merging done!')
 
         console.log('Loading result');
-        let newLayer = await createLinkLayer("result", image);
+        let newLayer = await createLinkLayer("fill_neural", image);
         if (newLayer === null){
             return null;
         }
@@ -444,8 +458,7 @@ function Panel() {
             if (scene.documentID === app.activeDocument._id) {
                 return {
                     ...scene,
-                    fillmap,
-                    palette,
+                    fill_neural,
                     image,
                 }
             }
@@ -462,14 +475,19 @@ function Panel() {
         
         let splitLayer = await saveCoarseSplitHintLayer();
         const stroke = await loadBase64('split-hint-coarse.png')
+
+        // load the fill results
+        await saveFillNeuralLayer();
+        const fill_neural = await loadBase64('fill-neural.png');
+        
+        await saveLineArtistLayer();
+        const line_artist = await loadBase64('line-artist.png');
         
         const data = {
-            line_artist: scene.line_artist,
-            line_simplified: scene.line_simplified,
-            fillmap: scene.fillmap,
-            fillmap_artist: scene.fillmap_artist,
+            line_artist: line_artist,
+            fill_neural: fill_neural,
+            fill_artist: scene.fill_artist,
             stroke,
-            palette: scene.palette,
         }
         console.log('sending request...')
         const url = 'http://68.100.80.232:8080/splitauto'
@@ -487,11 +505,11 @@ function Panel() {
         console.log('got result')
         console.log(result)
 
-        const { line_simplified, image, fillmap, layers, palette } = result;
+        const { line_simplified, image} = result;
         console.log('Splitting done!')
 
         console.log('Loading result');
-        let newLayer = await createLinkLayer("result", image);
+        let newLayer = await createLinkLayer("fill_neural", image);
         if (newLayer === null){
             return null;
         }
@@ -524,10 +542,8 @@ function Panel() {
             if (scene.documentID === app.activeDocument._id) {
                 return {
                     ...scene,
-                    fillmap,
-                    palette,
+                    fill_neural,
                     image,
-                    // layers,
                 }
             }
             return scene
@@ -537,25 +553,27 @@ function Panel() {
     }
 
     async function splitfine() {
-        // 从scense中读取必要的信息
-        // 但相关的定义和借口都不是很清楚，因此需要之后进一步搞清楚
         console.log('Fine Splitting...');
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0];
         const { fileName } = scene;
         
         let splitLayer = await saveFineSplitHintLayer();
         const stroke = await loadBase64('split-hint-fine.png');
+
+        // load the fill results
+        await saveFillNeuralLayer();
+        const fill_neural_in = await loadBase64('fill-neural.png');
+        
+        await saveLineArtistLayer();
+        const line_artist_in = await loadBase64('line-artist.png');
         
         const data = {
-            line_artist: scene.line_artist,
-            // line_simplified: scene.line_simplified,
-            fillmap: scene.fillmap,
-            fillmap_artist: scene.fillmap_artist,
+            line_artist: line_artist_in,
+            fill_neural: fill_neural_in,
+            fill_artist: scene.fill_artist,
             stroke,
-            palette: scene.palette,
         };
         
-        // 发送请求
         console.log('sending request...');
         const url = 'http://68.100.80.232:8080/splitmanual';
         const response = await fetch(url, {
@@ -571,11 +589,11 @@ function Panel() {
         const result = await response.json();
         console.log('got result');
         console.log(result);
-        const { line_artist, line_simplified, image, fillmap, layers, palette } = result;
+        const { line_artist, line_simplified, image } = result;
         console.log('Splitting done!');
 
         console.log('Loading result');
-        let newLayer = await createLinkLayer("result", image);
+        let newLayer = await createLinkLayer("fill_neural", image);
         if (newLayer === null){
             return null;
         }
@@ -618,10 +636,8 @@ function Panel() {
             if (scene.documentID === app.activeDocument._id) {
                 return {
                     ...scene,
-                    fillmap,
-                    palette,
+                    line_simplified,
                     image,
-                    // layers,
                     line_artist
                 }
             }
@@ -649,13 +665,24 @@ function Panel() {
         StartFlatting = false;
     }
 
-    const listener = (event, descriptor) => {
+    async function listener(event, descriptor){
         if (event === 'close') {
             const { documentID } = descriptor
-            const newScenes = scenes.filter(scene => scene.documentID !== documentID);
-            setScenes(newScenes);
+            removeSceneByID(documentID)
+        }
+        if (event === 'open'){
+            // if we can't 
+            console.log('we are here!')
         }
      }
+
+    function removeSceneByID(docID){
+        // we can't access scenes in this function, why?
+        // still don't know how to sovle this problem
+        let s = getScenes();
+        const newScenes = s.filter(scene => scene.documentID !== docID);
+        setScenes(newScenes);
+    }
 
     useEffect(() => {        
         photoshop.action.addNotificationListener([
@@ -900,7 +927,7 @@ function Panel() {
                         activeScene={activeScene}
                         setActiveScene={setActiveScene}
                         setIsFlatting={setIsFlatting}
-                        startFlatting={StartFlatting}/>
+                        startFlatting={getFlatting}/>
                 <Button onClick={loadNewScenes}>+ Add More Scenes...</Button>
             </Grid>
 
