@@ -31,6 +31,7 @@ async function asyncForEach(array, callback) {
 /**
  * Brush
  */
+ // need to improve this function, add color parameter to this function
 export async function handleMergeToolClick(brushSize) {
     const mergeHintLayer = getMergeHintLayer()
     // Select layer if already exists
@@ -60,14 +61,15 @@ export async function handleMergeToolClick(brushSize) {
                 "modalBehavior": "fail"
             }
         );            
+    // await moveLayerToTop(mergeHintLayer._id);
     }
     // Otherwise create it
     else {
         createMergeHintLayer()
     }
     await activatePencil();
-    await setBrushSize(2);
-    await setColorRed();
+    await setBrushSize(brushSize);
+    // await setColorRed();
 }
 
 export async function handleFineSplitToolClick(brushSize) {
@@ -606,6 +608,26 @@ async function renameActiveLayer(name) {
 
 }
 
+export async function setRGBMode(){
+    const result = await batchPlay(
+    [
+       {
+          "_obj": "convertMode",
+          "to": {
+             "_class": "RGBColorMode"
+          },
+          "_isCommand": true,
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       "modalBehavior": "fail"
+    });
+
+}
+
 /**
  * Helpers for merge / split hint layers
  */
@@ -660,12 +682,17 @@ function _arrayBufferToBase64( buffer ) {
     return btoa( binary );
 }
 
+
+
+
+
+
 // Open files and read their id, filename, and base64 string
 export async function readFiles() {
     // pop up a dialog to select images 
     const files = await fs.getFileForOpening({
         allowMultiple: true,
-        types: uxp.storage.fileTypes.images
+        types: st.fileTypes.images
     });
     // save the path of all opened files
     // maybe useful, I don't know
@@ -768,6 +795,21 @@ async function createNewFile(fileName) {
     const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
     const thePersistentFolder = await fs.getEntryForPersistentToken(thePersistentFolderToken);
     const file = await thePersistentFolder.createFile(fileName, {overwrite: true});
+    return file;
+}
+
+export async function createNewFileDialog(){
+    const folder = await fs.getFolder();
+    // const token = await fs.createPersistentToken(folder);
+    // we can't specify the saving name of palette, so we use the date as the file name
+    var currentdate = new Date(); 
+    const fileName = "FlattingPalette_"+ currentdate.getDate() + "-"
+                + (currentdate.getMonth()+1)  + "-" 
+                + currentdate.getFullYear() + "_"  
+                + currentdate.getHours() + "-"  
+                + currentdate.getMinutes() + "-" 
+                + currentdate.getSeconds() + ".txt";
+    const file = await folder.createFile(fileName, {overwrite: false});
     return file;
 }
 

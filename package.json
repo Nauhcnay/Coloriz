@@ -27,8 +27,9 @@
     "webpack-cli": "^3.3.2"
   },
   "dependencies": {
-    "@adobe/react-spectrum": "^3.8.0",
+    "@adobe/react-spectrum": "^3.10.0",
     "@material-ui/core": "^4.11.3",
+    "@material-ui/icons": "^4.11.2",
     "@spectrum-web-components/slider": "^0.9.1",
     "antd": "^4.14.0",
     "btoa": "^1.2.1",

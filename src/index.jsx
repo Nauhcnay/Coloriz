@@ -6,11 +6,11 @@ import ReactDOM from "react-dom";
 
 import "./styles.css";
 import { PanelController } from "./controllers/PanelController.jsx";
-import Panel from "./panels/Panel.jsx";
+import ThemedPanel from "./panels/Panel.jsx";
 
 import { entrypoints } from "uxp";
 
-const panelController =  new PanelController(() => <Panel/>, { id: "demos", menuItems: [
+const panelController =  new PanelController(() => <ThemedPanel/>, { id: "demos", menuItems: [
     { id: "reload1", label: "Reload Plugin", enabled: true, checked: false, oninvoke: () => location.reload() },
 ] });
 

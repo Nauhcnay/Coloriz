@@ -1,13 +1,19 @@
 // https://reactjs.org/
 import React, { useState, useEffect } from "react";
 import photoshop from 'photoshop';
+import uxp from 'uxp';
+const fs = uxp.storage.localFileSystem;
+const st = uxp.storage;
 
 // load resource
 import mergeInstruction from '../assets/merge-instruction.png'
 import splitInstruction from '../assets/split-instruction.png'
+// import colorIcon from '../assets/color.svg'
+// import tuningIcon from '../assets/tuning.svg'
 
 // load from own scripts
 import {
+    setRGBMode,
     handleMergeToolClick,
     handleFineSplitToolClick,
     handleCoarseSplitToolClick,
@@ -33,17 +39,19 @@ import {
     moveSimplifiedLayerBack,
     moveArtistLayerBack,
     saveLineArtistLayer,
-    saveFillNeuralLayer
+    saveFillNeuralLayer,
+    createNewFileDialog,
 } from '../functions';
 
-import { Modal } from 'antd';
+import { Modal } from 'antd'; // why import this line? it is not used anywhere
 import { ThemeProvider, createMuiTheme } from '@material-ui/core/styles';
+import {Provider, defaultTheme} from '@adobe/react-spectrum';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import { makeStyles, withStyles } from '@material-ui/core/styles';
 import { TextField } from '@adobe/react-spectrum'
 import { red, yellow, blue } from '@material-ui/core/colors';
 import Button from '@material-ui/core/Button';
-import Slider from '@material-ui/core/Slider';
+import {Slider} from '@adobe/react-spectrum'
 import { PhotoshopPicker } from 'react-color';
 import Typography from '@material-ui/core/Typography';
 import Grid from '@material-ui/core/Grid'
@@ -56,55 +64,120 @@ import Paper from '@material-ui/core/Paper';
 import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
 import Scenes from "../components/Scenes.jsx";
+import SvgIcon from '@material-ui/core/SvgIcon';
+import Avatar from '@material-ui/core/Avatar';
+import Badge from '@material-ui/core/Badge';
+import Input from '@material-ui/core/Input';
 
 /*
 local variables
 */
+// icons 
+// this is not work on sandbox
+const colorIcon = (props) => (
+  <SvgIcon {...props}>
+    <svg xmlns="http://www.w3.org/2000/svg" width="12.748" height="10.736" viewBox="0 0 12.748 10.736">
+      <g id="Group_2715" data-name="Group 2715" transform="translate(-237.496 -204.624)">
+        <path id="Path_1630" data-name="Path 1630" d="M249.579,211.2a.776.776,0,0,0,.32-.963l-.919-2.22a.776.776,0,0,0-.717-.479.512.512,0,1,1-.263-.988l-1.7-1.7a.776.776,0,0,0-1.1,0l-7.481,7.484a.776.776,0,0,0,0,1.1l1.7,1.7a.775.775,0,0,0,1.08.016h8.966a.776.776,0,0,0,.776-.776v-2.4A.776.776,0,0,0,249.579,211.2Zm-9.533,2.331a.512.512,0,1,1,0-.725A.512.512,0,0,1,240.047,213.533ZM248.132,208a.344.344,0,0,1,.45.187l.919,2.22a.345.345,0,0,1-.186.451l-7.711,3.193,5.71-5.712Zm-3.186-1.672a1.119,1.119,0,1,1,0,1.583A1.119,1.119,0,0,1,244.946,206.324ZM243,208.27h0a1.119,1.119,0,0,1,1.582,1.583h0a1.119,1.119,0,0,1-1.582,0h0A1.12,1.12,0,0,1,243,208.27Zm-1.945,1.945a1.119,1.119,0,1,1,0,1.583A1.118,1.118,0,0,1,241.057,210.215Zm8.756,4.157a.345.345,0,0,1-.345.345h-8.353l7.467-3.092h.886a.345.345,0,0,1,.345.345Z" transform="translate(0 0)" fill="#9ae42c"/>
+      </g>
+    </svg>
+  </SvgIcon>
+);
 // uxp photoshop api entrance
 const app = photoshop.app
 
 // theme 
 const theme = createMuiTheme({
     palette: {
-        type: "dark",
-        // primary: primaryColor,
+        // type: "dark",
+        // primary: {main: "#ffffff"},
         // secondary: secondaryColor,
-    }
+        text:{primary: "#ffffff"}
+
+    },
+    typography: {
+    // In Chinese and Japanese the characters are usually larger,
+    // so a smaller fontsize may be appropriate.
+    fontSize: 10,
+    },    
 });
 
 // https://www.w3schools.com/js/js_arrow_function.asp
+// https://material-ui.com/styles/api/#makestyles-styles-options-hook
 const useStyles = makeStyles((theme) => ({
     root: {
-      minWidth: 240,
-      height: '100vh'
+      minWidth: 400,
+      height: '100vh',
       // width: '100%',
       // maxWidth: 360,
-      // backgroundColor: theme.palette.background.pax`per,
     },
+
     scenes: {
-        overflowY: 'scroll'
+        overflowY: 'scroll',
     },
+
     radioGroup: {
         display: 'flex',
         flexDirection: 'row',
         justifyContent: 'space-between',
-    }
+    },
+    input: {
+        width: 100,
+        height: 100,
+      },
 }));
 
 // Panle componments
 // need to find the doc of withStyles
 // seems like a function to warp the style definition into a html element (or an React componment)
 // ToDO: replace these to the UXP UI componments
+const StyledTabs = withStyles({
+  indicator: {
+    display: 'flex',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    '& > span': {
+      //maxWidth: 40,
+      width: '100%',
+      backgroundColor: '#9AE42C',
+    },
+  },
+})((props) => <Tabs {...props} TabIndicatorProps={{ children: <span /> }} />);
+
+const StyledTab = withStyles((theme) => ({
+  root: {
+    textTransform: 'none',
+    color: '#fff',
+    fontWeight: theme.typography.fontWeightRegular,
+    fontSize: theme.typography.pxToRem(7),
+    marginRight: theme.spacing(1),
+    scrollButtons: 'auto',
+    '&:hover': {
+      color: '#9DE42C',
+      opacity: 1,
+    },
+    '&$selected': {
+      color: '#9AE42C',
+      fontWeight: theme.typography.fontWeightMedium,
+    },
+    '&:focus': {
+      color: '#9DE42C',
+    },
+  },
+  // this line is necessary, I don't know why
+  selected:{}
+}))((props) => <Tab  disableRipple {...props} />);
+
 const RedRadio = withStyles({
     root: {
       color: red[400],
       
-      '&$checked': {
+      '`&`$checked': {
         color: red[600],
       },
     },
     checked: {},
-})((props) => <Radio color="default" {...props} />);
+})((props) => <Radio {...props} />);
 
 const YellowRadio = withStyles({
     root: {
@@ -115,7 +188,7 @@ const YellowRadio = withStyles({
         },
     },
     checked: {},
-})((props) => <Radio color="default" {...props} />);
+})((props) => <Radio {...props} />);
 
 const BluewRadio = withStyles({
     root: {
@@ -126,25 +199,75 @@ const BluewRadio = withStyles({
         },
     },
     checked: {},
-})((props) => <Radio color="default" {...props} />);
+})((props) => <Radio {...props} />);
+
+
+const ButtonStyle = {
+            color:"#9AE42C", 
+            fontSize: 2,
+            border: '1px solid',
+            width:70, 
+            height:15};
+
+const AddButtonStyle = {
+            fontSize: 2,
+            width:70, 
+            height:15};
 
 const TwoStateButton = (props) => (
-    <Button style={{width: '80%', height: 30 }}
-        variant="contained"
+    <Button 
         disabled={props.isLoading}
-        onClick={props.onClick}>
+        onClick={props.onClick}
+        variant='outlined'
+        style={ButtonStyle}>
         {props.isLoading ? 'Loading...' : props.text}
     </Button>
 );
 
 const ThreeStateButton = (props) => (
-    <Button style={{width: '80%', height: 30 }}
-        variant="contained"
+    <Button 
         disabled={props.isLoading === 0 ? true : false}
-        onClick={props.onClick}>
-        {props.isLoading === 1 ? "Flat" : "Show flatted"}
+        onClick={props.onClick}
+        variant='outlined'
+        style={ButtonStyle}>
+        {props.isLoading === 2? "Show" : props.text}
     </Button>
 );
+
+const colors_test = ['#4D4D4D', '#999999', '#FFFFFF', '#F44E3B', '#FE9200', '#FCDC00', '#DBDF00', '#A4DD00', '#68CCCA', '#73D8FF', '#AEA1FF', '#FDA1FF'];
+let palette = [
+                    {'name':'palette A', 'colors':colors_test}, 
+                    {'name':'palette B','colors':colors_test}
+                ];
+
+
+// const StyledTabs = withStyles({
+//   indicator: {
+//     display: 'flex',
+//     justifyContent: 'center',
+//     backgroundColor: 'transparent',
+//     '& > span': {
+//       maxWidth: 40,
+//       width: '100%',
+//       backgroundColor: '#635ee7',
+//     },
+//   },
+// })((props) => <Tabs {...props} TabIndicatorProps={{ children: <span /> }} />);
+
+// const StyledTab = withStyles((theme) => ({
+//   root: {
+//     textTransform: 'none',
+//     color: '#fff',
+//     fontWeight: theme.typography.fontWeightRegular,
+//     //fontSize: theme.typography.pxToRem(1),
+//     fontSize: '5px',
+//     marginRight: theme.spacing(1),
+//     '&:focus': {
+//       opacity: 1,
+//     },
+//   },
+// }))((props) => <Tab disableRipple {...props} />);
+
 
 
 /*
@@ -156,7 +279,7 @@ var StartFlatting = false;
 var scenesGlobal;
 const getScenes = ()=>scenesGlobal;
 function Panel() {
-    const getFlatting = ()=> StartFlatting; // we have the pass the function instead of variable
+    const getFlatting = ()=> StartFlatting; // we have to the pass the function instead of variable
     const setFlatting = (set)=> StartFlatting = set;
     const classes = useStyles();
     const [scenes, setScenes] = useState([]);
@@ -170,8 +293,13 @@ function Panel() {
     const [isMerging, setIsMerging] = useState(false);
     const [isSplitting, setIsSplitting] = useState(false);
     const [isFlatting, setIsFlatting] = useState(1);
+    const [paletteChange, setPaletteChange] = React.useState(palette);
+    const [selectedColor, setSelectedColor] = React.useState(null);
+
 
     const [brushMode, setBrushMode] = useState('merge');
+    // const [brushSize, setBrushSize] = React.useState(20);
+    
     const handleBrushModeChange = (event) => {
         setBrushMode(event.target.value);
     };
@@ -204,11 +332,80 @@ function Panel() {
         </FormControl>
     )
 
-    const MergeButton = <TwoStateButton onClick={tryMerge} text="Merge" isLoading={isMerging}/>
-    const SplitButtonFine = <TwoStateButton onClick={trySplitFine} text="Fine Split" isLoading={isSplitting}/>
-    const SplitButtonCoarse = <TwoStateButton onClick={trySplitCoarse} text="Coarse Split" isLoading={isSplitting}/>
-    const FlatButton = <ThreeStateButton onClick={tryFlat} isLoading={isFlatting}/>
+    const ColorizeButton = <TwoStateButton onClick={tryMerge} text="Colorize" isLoading={isMerging}/>
+    const TuningButton = <TwoStateButton onClick={trySplitFine} text="Tuning" isLoading={isSplitting}/>
+    // const MergeButton = <TwoStateButton onClick={tryMerge} text="Merge" isLoading={isMerging}/>
+    // const SplitButtonFine = <TwoStateButton onClick={trySplitFine} text="Fine Split" isLoading={isSplitting}/>
+    // const SplitButtonCoarse = <TwoStateButton onClick={trySplitCoarse} text="Coarse Split" isLoading={isSplitting}/>
+    const FlatButton = <ThreeStateButton onClick={tryFlat} isLoading={isFlatting} text={isFlatting === 0 ? "Loading" : "Flat"}/>
+    
+    const SavePaletteButtom = () => {
+        return (
+        <Button
+            variant="outlined"
+            style={ButtonStyle} 
+            onClick={savePalette}>
+        Save
+        </Button>)
+    };
 
+    const LoadPaletteButtom = () => {
+        return (
+        <Button 
+            variant="outlined"
+            style={ButtonStyle} 
+            onClick={readPalette}>
+        Load
+        </Button>)
+    };
+
+    const StartTuningButtom = () => {
+        return (
+        <Button 
+            variant="outlined"
+            style={ButtonStyle} 
+            onClick={()=>handleFineSplitToolClick(3)}>
+        Start
+        </Button>)
+    };
+    const handleBrushSizeChange = (event) => {
+        // alert("test");
+        document.querySelector("#mergeSlider").value = Number(event.target.value)
+        document.querySelector("#mergeText").value = Number(event.target.value)
+        // setMergeBrushSize(event.target.value);
+    };
+
+    const handleInputChange = () => {
+
+        handleMergeToolClick(document.querySelector("#mergeSlider").value);
+    };
+
+    const handleBlur = () => {
+        // setMergeBrushSize(document.querySelector("#mergeSlider").value)
+        handleMergeToolClick(document.querySelector("#mergeSlider").value);
+    };
+
+    async function readPalette(){
+        // open a json palette
+        const file = await fs.getFileForOpening({
+            allowMultiple: false,
+            types: st.fileTypes.text
+        });
+        let paletteText = await file.read();
+        if (typeof paletteText !== undefined)
+            setPaletteChange(JSON.parse(paletteText));
+    }
+
+    async function savePalette(){
+        let paletteText = JSON.stringify(paletteChange);
+        const file = await createNewFileDialog();
+        if (!file) {
+            // no file selected, or the user didn't want to overwrite one they did select
+            return;
+        }
+        await file.write(paletteText);
+
+    }
 
     async function tryFlat() {
         if (isFlatting === 1){
@@ -355,6 +552,7 @@ function Panel() {
 
     async function flatSingle() {
         console.log('loading flatting results...')
+        setRGBMode();
         // read data from selected input
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
         try{
@@ -705,28 +903,109 @@ function Panel() {
             else if (brushMode ===  'splitcoarse'){
                 return SplitButtonCoarse; 
             }}
+    
+    const handleColorBlobClick = async(name, hex) => {
+        setSelectedColor(name+hex);
+        await activatePaintBucket()
+        await setColor(hex)
+        handleMergeToolClick(mergeBrushSize);
+    }
+
+    const ColorBlob = ({name, hex, selected }) => {
+        if (selected === name+hex)
+            return (
+                <Badge color="primary" variant="dot" invisible={false}>
+                    <Grid onClick={() => handleColorBlobClick(name, hex)} style={{ backgroundColor: hex, width: 20, height: 20, margin: 2}}/>
+                </Badge>
+            );
+        else
+            return <Grid onClick={() => handleColorBlobClick(name, hex)} style={{ backgroundColor: hex, width: 20, height: 20, margin: 2}}/>;
+    }
+    
+    const PaletteGrid = ({p})=>{
+        return (
+        <>
+            {p.name}
+            <Grid item xs={12} style={{ display: 'flex' }}>
+                <Grid container justify="flex-start" spacing={1}>
+                    {p.colors.map(hex => <ColorBlob key={hex} hex={hex} selected={selectedColor} name={p.name}/>)}
+                </Grid>
+            </Grid>
+        </>
+        )
+    }
 
     const FlattingTab = (      
         //https://www.reactenlightenment.com/react-jsx/5.1.html
         // JSX allows us to put HTML into JavaScript.
         // https://reactjs.org/docs/introducing-jsx.html 
         <>
-            <Grid item xs={12} style={{ height: 40, display: 'flex', justifyContent: 'center'}}>
-                { FlatButton }
-            </Grid> 
+            <div class="group" ><sp-label>Instruction</sp-label>
+            <sp-body size="XS">
+               1. Click "Add more line drawings" on the left to add scenes.<br />
+               2. Press "flat" button to auto flatting. <br />
+               3. When ready, press "show flatted" button to show result. { FlatButton }<br />
+               4. Pick a color from a palette and brush over segments. Once ready, press "colorize". { ColorizeButton } 
+            </sp-body>
+            </div>
+            <div class="group" ><sp-label>Color</sp-label>
+            <sp-body size="XS">
+                <div xs={12} float="right">
+                   <LoadPaletteButtom/> <SavePaletteButtom/>
+                </div>
+                {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
+            </sp-body>
+            </div>
+            <div class="group" ><sp-label>Brush</sp-label>
+            <sp-body >
+                {/*<Slider
+                    labelPosition="side"
+                    label="Size"
+                    minValue={50}
+                    maxValue={150}
+                    value={typeof mergeBrushSize === 'number' ? mergeBrushSize : 20}
+                    onChange={handleSliderChange}
+                    showValueLabel={true}>
+                </Slider> */}
+                
+                    
+                    {/*<input
+                        id="mergeText"
+                        type="number"
+                        //value={0}
+                        
+                        onChange={handleBrushSizeChange}
+                        style={{width:"15%"}}
+                        onBlur={handleBlur}/>*/}
+                        
+               
+                    <sp-slider
+                        id="mergeSlider"
+                        type="range" 
+                        min="1" 
+                        max="100"
+                        step="1"
+                        //value={20}
+                        onMouseUp={handleInputChange}
+                        
+                        style={{width:"100%"}}>
+                        <sp-label slot="label">Size</sp-label> 
+                    </sp-slider>
+            </sp-body>
+            </div>
             
-            <Grid item xs={12}>
+            {/*<Grid item xs={12}>
                 { BrushRadioGroup }
             </Grid>
             
-            <Grid item xs={12}>
+            {<Grid item xs={12}>
                 <Typography variant="h6" component="div">
                     Instruction:
                 </Typography>
                 <Typography variant="body2" component="div">
                     { brushMode === 'merge' ? mergeInstructionText : splitInstructionText }
                 </Typography>
-            </Grid>
+            </Grid>}
 
             <Grid item xs={12}>
                 <img
@@ -739,7 +1018,7 @@ function Panel() {
             
             <Grid item xs={12} style={{ display: 'flex', justifyContent: 'center'}}>
                 {brush()}
-            </Grid>
+            </Grid>*/}
         </>
         
     );
@@ -777,15 +1056,8 @@ function Panel() {
     //     setCharacters(newCharacters)
     // }
     
-    const handleColorBlobClick = async(hex) => {
-        await activatePaintBucket()
-        await setColor(hex)
-    }
-    const ColorBlob = ({ hex }) => {
-        return (
-            <div onClick={() => handleColorBlobClick(hex)} style={{ backgroundColor: hex, width: 20, height: 20, margin: 2}}/>
-        )
-    }
+    
+
     // const Palette = ({ id, characterName, colors, handleChange }) => (
     //     <div>
     //         <TextField
@@ -794,7 +1066,7 @@ function Panel() {
     //             onChange={(value) => handleChange(value, id)}
     //          />
     //         <div style={{ display: 'flex' }}>
-    //             {colors.map(color => <ColorBlob key={id+color} color={color}/>)}
+    //             {colors.map(color => <handleColorBlobClick key={id+color} color={color}/>)}
     //             <Button style={{width:20, height:20, margin: 0, padding: 0}}>+</Button>
     //         </div>
     //     </div>
@@ -865,99 +1137,85 @@ function Panel() {
     //     setColorPickerVisible(false);
     // }
 
-    const colors = ['#4D4D4D', '#999999', '#FFFFFF', '#F44E3B', '#FE9200', '#FCDC00', '#DBDF00', '#A4DD00', '#68CCCA', '#73D8FF', '#AEA1FF', '#FDA1FF']
-    const colors2 = ['#333333', '#808080', '#CCCCCC', '#D33115', '#E27300', '#FCC400', '#B0BC00', '#68BC00', '#16A5A5', '#009CE0', '#7B64FF', '#FA28FF']
-    const colors3 = ['#000000', '#666666', '#B3B3B3', '#9F0500', '#C45100', '#FB9E00', '#808900', '#194D33', '#0C797D', '#0062B1', '#653294', '#AB149E']
+    
     
     
     // TODO: try to make this function connect to API, or just remove this function
     const LoadSegmentsButton = <twoStateButton onClick={loadSegments} text="Load Segments" isLoading={false}/>
     const ColoringTab = (
         <>
-            <Grid item xs={12}>
-                {LoadSegmentsButton}
-            </Grid>
-            <Grid item xs={12}>
-                <Typography variant="h6" component="div">
-                    Instruction:
-                </Typography>
-                <Typography variant="body2" component="div">
-                    { colorInsturctionText }
-                </Typography>
-            </Grid>
-            <Grid item xs={12} style={{ display: 'flex' }}>
-                {colors.map(hex => <ColorBlob key={hex} hex={hex}/>)}
-            </Grid>
-            <Grid item xs={12} style={{ display: 'flex' }}>
-                {colors2.map(hex => <ColorBlob key={hex} hex={hex}/>)}
-            </Grid>
-            <Grid item xs={12} style={{ display: 'flex' }}>
-                {colors3.map(hex => <ColorBlob key={hex} hex={hex}/>)}
-            </Grid>
-            {/* {characters.map(c => (
-                <Grid key={c.id} item xs={12}>
-                    <Palette 
-                        id={c.id}
-                        characterName={c.characterName}
-                        colors={c.colors}
-                        handleChange={handleCharacterNameChange}
+            <div class="group" ><sp-label>Instruction</sp-label>
+                <sp-body size="XS">
+                    if some lines don't accurately separate segments, redarw for boundary tuning.
+                    <img
+                        src={splitInstruction}
+                        alt="split-instruction"
+                        width="100%"
+                        height="93"
                     />
-                    <Button onClick={addCharacter} style={{width:160, height:30, marginTop: 30}}>+ Add Character</Button>
+                <Grid container xs={12} justify="flex-start">
+                    <Grid item xs={6}>
+                        <StartTuningButtom></StartTuningButtom>
+                    </Grid>
+                    <Grid item xs={6}>
+                        {TuningButton}
+                    </Grid>
                 </Grid>
-            ))} */}
-            {/* { colorPickerVisible && (
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%'}}>
-                    <PhotoshopPicker 
-                        color={ activeColor }
-                        onChange={ handleColorChangeComplete }
-                        header={ 'activeColorButton' }
-                        onAccept={ handleColorAccept }
-                        onCancel={ handleColorCancel }
-                    />
-                </div>                
-            )} */}
+                </sp-body>
+            </div>
+
+            
         </>
     )
 
     // the code that construct the panel
     return (
         <Grid container className={classes.root}>
-            <Grid item xs={5} className={classes.scenes}>
+            
+            <Grid item xs={4} className={classes.scenes}>
                 <Scenes scenes={scenes}
                         activeScene={activeScene}
                         setActiveScene={setActiveScene}
                         setIsFlatting={setIsFlatting}
                         startFlatting={getFlatting}/>
-                <Button onClick={loadNewScenes}>+ Add More Scenes...</Button>
+                <Button 
+                    onClick={loadNewScenes}
+                    style={AddButtonStyle}>
+                        + Add
+                </Button>
             </Grid>
 
-            <Grid item container xs={7} style={{ padding: 10 }}>
-            <div>
-                <Tabs
-                    value={tab}
-                    style={{ marginBottom: 10 }}
-                    // indicatorColor="primary"
-                    // textColor="primary"
-                    onChange={handleTabChange}
-                    aria-label="disabled tabs example"
-                >
-                    <Tab label="Flatting" />
-                    <Tab label="Base Coloring" />
-                </Tabs>
-                { tab === 0 ? FlattingTab : ColoringTab }
-            </div>
+            {/*<Grid item container xs={6} style={{ padding: 10 }}>*/}
+            <Grid item container xs={8}>
+                <Grid>
+                    <StyledTabs
+                        value={tab}
+                        onChange={handleTabChange}
+                        variant='fullWidth'>
+                        <StyledTab label="Coloring" />
+                        <StyledTab label="Tuning" />
+                    </StyledTabs>
+                    { tab === 0 ? FlattingTab : ColoringTab }
+                </Grid>
             </Grid>
-
         </Grid>
     );
 }
 
-// to understand export and import 
-// https://zhuanlan.zhihu.com/p/144475026
+
 export default function ThemedPanel() {
     return (
-        // <ThemeProvider theme={theme}>
+        <ThemeProvider theme={theme}>
             <Panel />
-        // </ThemeProvider>
+        </ThemeProvider>
     )
 }
+
+// export default function ThemedPanel() {
+//     return (
+//         <Provider theme={defaultTheme}>
+//             <Panel />
+//         </Provider>
+//     )
+// }
+//  
