@@ -8,6 +8,9 @@ const actionTree = photoshop.app.actionTree;
 const batchPlay = photoshop.action.batchPlay;
 const fs = uxp.storage.localFileSystem;
 const st = uxp.storage;
+// https://www.adobe.io/xd/uxp/develop/tutorials/how-to-ask-user-for-confirmation/
+const { confirm } = require("./lib/dialogs.js");
+
 // https://www.adobe.io/xd/uxp/uxp/reference-js/Modules/uxp/Persistent%20File%20Storage/Folder/
 // this is not existing in the real uxp api! I really don't know what to say, why they provide such documentation?
 // const fd = uxp.storage.Folder;
@@ -61,7 +64,10 @@ export async function handleMergeToolClick(brushSize) {
                 "modalBehavior": "fail"
             }
         );            
-    // await moveLayerToTop(mergeHintLayer._id);
+        
+        if (app.activeDocument.layers[0]._id !== mergeHintLayer._id){
+            console.log("Moving merge hint layer to the top");
+            await moveLayerToTop(mergeHintLayer, true);}
     }
     // Otherwise create it
     else {
@@ -100,7 +106,10 @@ export async function handleFineSplitToolClick(brushSize) {
                 "synchronousExecution": false,
                 "modalBehavior": "fail"
             }
-        );            
+        );
+      if (app.activeDocument.layers[0]._id !== splitHintLayer._id){
+        console.log("Moving split hint layer to the top");
+        await moveLayerToTop(splitHintLayer, true);}            
     }
     // Otherwise create it
     else {
@@ -434,40 +443,47 @@ export async function selectLayerByName(layerName){
 export async function moveSplitHintToTop(){
     const layer = getLayerByName('split-hint');
     console.log("Move split hint layer to top")
-    await moveLayerToTop(layer._id)
+    await moveLayerToTop(layer)
 }
 
-export async function moveLayerToTop(layerID) {
-    const result = await batchPlay(
-    [
-    {
-        "_obj": "move",
-        "_target": [
-            {
-                "_ref": "layer",
-                "_enum": "ordinal",
-                "_value": "targetEnum"
-            }
-        ],
-        "to": {
-            "_ref": "layer",
-            "_index": app.activeDocument.layers.length - 1
-        },
-        "adjustment": false,
-        "version": 5,
-        "layerID": [
-            layerID
-        ],
-        "_isCommand": false,
-        "_options": {
-            "dialogOptions": "dontDisplay"
-        }
-    }
-    ],{
-    "synchronousExecution": false,
-    "modalBehavior": "fail"
-    });
+// export async function moveLayerToTop(layerID) {
+//     const result = await batchPlay(
+//     [
+//     {
+//         "_obj": "move",
+//         "_target": [
+//             {
+//                 "_ref": "layer",
+//                 "_enum": "ordinal",
+//                 "_value": "targetEnum"
+//             }
+//         ],
+//         "to": {
+//             "_ref": "layer",
+//             "_index": app.activeDocument.layers.length - 1
+//         },
+//         "adjustment": false,
+//         "version": 5,
+//         "layerID": [
+//             layerID
+//         ],
+//         "_isCommand": false,
+//         "_options": {
+//             "dialogOptions": "dontDisplay"
+//         }
+//     }
+//     ],{
+//     "synchronousExecution": false,
+//     "modalBehavior": "fail"
+//     });
+// }
+
+export async function moveLayerToTop(layer, forEdit=false) {
+    let topLayer = app.activeDocument.layers[0];
+    if (topLayer._id !== layer._id)
+        await moveAboveTo(layer, topLayer, forEdit);
 }
+
 
 async function moveLayerToBottom(layerID) {
     const result = await batchPlay(
@@ -483,7 +499,7 @@ async function moveLayerToBottom(layerID) {
         ],
         "to": {
             "_ref": "layer",
-            "_index": 0
+            "_index": 1
         },
         "adjustment": false,
         "version": 5,
@@ -684,8 +700,35 @@ function _arrayBufferToBase64( buffer ) {
 
 
 
+function showResizeConfirm(){
+    document.querySelector("#dlgExample").uxpShowModal({
+    title: "Resize your work?",
+    resize: "none", // "both", "horizontal", "vertical",
+    size: {
+      width: 480,
+      height: 240
+    }
+  });
+}
 
+async function showConfirm(doc, w_new, h_new, th) {
+  /* we'll display a dialog here */
+  const feedback = await confirm(
+          "Resize your work?", //[1]
+          `The shorter side of your drawing is greater than ${th}px. This will delay the flatting process to a few minitues per each image. would you like to reszie your work to ${parseInt(w_new)}px x ${parseInt(h_new)}px ?`, //[2]
+          ["No", "Yes"] /*[3]*/
+        );
+  switch (feedback.which) {
+  case 0:
+    /* User canceled */
+    return false;
+  case 1:
+    /* User clicked Enable */
+    // resize locally is difficult, let's do it at the backend
+    return true;
+}
 
+}
 
 // Open files and read their id, filename, and base64 string
 export async function readFiles() {
@@ -716,9 +759,34 @@ export async function readFiles() {
     const newScenes = await Promise.all(files.map(async (file) => {
         // read file and convert it to base64 code
         const fileContents = await file.read({format: uxp.storage.formats.binary});
-        const base64String = _arrayBufferToBase64(fileContents);
+        let base64String = _arrayBufferToBase64(fileContents);
         // open file in photoshop
         const doc = await app.open(file);
+        let w = doc.width;
+        let h = doc.height;
+        let th = 2000;
+        let w_new = w;
+        let h_new = h;
+        let r = 0;
+        let resize = false;
+        // if the image is too large, resize it first
+        if (w > th && h > th){
+            // compute the new width and height
+            if (w > h){
+                r = w/h;
+                h_new = th;
+                w_new = r*th;
+            }
+            else{
+                r = h/w;
+                w_new = th;
+                h_new = r*th;
+            }
+            // pop out a dialog to ask user to decide
+            resize = await showConfirm(app.activeDocument, w_new, h_new, th);
+        }
+        // 
+        await sleep(300);
         // rename and hide the opened image 
         if (app.activeDocument.activeLayers[0].locked === true){
             app.activeDocument.activeLayers[0].locked = false; //this is the best way to lock or unlock layer
@@ -735,6 +803,8 @@ export async function readFiles() {
             base64String,
             image: base64String,
             flatted: false,
+            resize,
+            clicked:false
         }    
     }))
     await ensurePersistentToken();
@@ -893,7 +963,7 @@ export async function saveLineArtistLayer() {
 }
 
 export async function saveFillNeuralLayer() {
-    await saveLayerByName('fill_neural', 'fill-neural.png');
+    await saveLayerByName('result_neural', 'fill-neural.png');
 }
 
 
@@ -952,7 +1022,7 @@ async function cleanLayerbyName(layerName, moveToTop = true){
     layer = await createLayer(layerName);
     // move the layer to the top, so user's input will before everything
     if (moveToTop){
-        await moveLayerToTop(layer._id);    
+        await moveLayerToTop(layer, true);    
     }
     return layer;
 }
@@ -972,7 +1042,7 @@ export async function moveArtistLayerBack(layerTarget){
     await moveAboveTo(layerTarget, backingLayer);  
 }
 
-async function moveAboveTo(layerTarget, backingLayer){
+async function moveAboveTo(layerTarget, backingLayer, forEdit=false){
     backingLayer.selected = true;
     layerTarget.selected = true;
     backingLayer.locked = false;
@@ -980,26 +1050,41 @@ async function moveAboveTo(layerTarget, backingLayer){
     layerTarget.moveAbove(backingLayer);
     layerTarget.moveAbove();
     backingLayer.locked = true;
-    layerTarget.locked = true;
     backingLayer.selected = false;
-    layerTarget.selected = false;
+    if (forEdit){
+        layerTarget.locked = false;
+        layerTarget.selected = true;    
+    }
+    else{
+        layerTarget.locked = true;
+        layerTarget.selected = false;
+    }
+
+    
 }
 
-async function moveBelowTo(layerTarget, frontLayer){
+async function moveBelowTo(layerTarget, frontLayer, forEdit=false){
     frontLayer.selected = true;
     layerTarget.selected = true;
     frontLayer.locked = false;
     layerTarget.locked = false;
     layerTarget.moveBelow(frontLayer);
-    // layerTarget.moveBelow();
+    layerTarget.moveBelow();
     frontLayer.locked = true;
-    layerTarget.locked = true;
     frontLayer.selected = false;
-    layerTarget.selected = false;
+    if (forEdit){
+        layerTarget.locked = false;
+        layerTarget.selected = true;
+    }
+    else{
+        layerTarget.locked = true;
+        layerTarget.selected = false;    
+    }
+    
 }
 ////////////////////////////////////////////////////
 // working area
-export async function createLinkLayer(layerName, img){
+export async function createLinkLayer(layerName, img, refresh=false){
     // get the action name
     // we have to do this because it is almost impossible to add image into a layer directly
     let actionName = await localStorage.getItem("actionName");
@@ -1018,10 +1103,10 @@ export async function createLinkLayer(layerName, img){
     if (newLayer === false){
         newLayer = await app.activeDocument.createLayer({name: layerName});
         // if this is new layer, move it to the top
-        await moveLayerToTop(newLayer._id)
+        await moveLayerToTop(newLayer, true)
     }
     else{
-        newLayer = await cleanLayerbyName(layerName, false);
+        newLayer = await cleanLayerbyName(layerName, refresh);
         // if this is existing layer, move it to the right position
         // or... do we really need to?
     }
@@ -1043,6 +1128,16 @@ export async function createLinkLayer(layerName, img){
     newLayer.name = layerName;
     newLayer.locked = true;
     newLayer.selected = false;
+    // I don't want to figure out why, but just put a dirty fix here 
+    if (layerName === "result_neural" )
+    {
+        let bottomLayer = app.activeDocument.layers[app.activeDocument.layers.length - 1];
+        await moveAboveTo(newLayer, bottomLayer);
+        // for( let i = 0; i < app.activeDocument.layers.length - 2; i++){
+        //     newLayer.moveBelow();
+        // }
+        
+    }
     return newLayer;
 }    
 
@@ -1259,7 +1354,7 @@ export async function loadLineHint(baseName, move) {
     await openInLayer(`${baseName}-line_hint.png`, 'line_hint')
     if (move){
         const layer = getLayerByName('line_hint')
-        await moveLayerToTop(layer._id)
+        await moveLayerToTop(layer)
     }
 }
 
@@ -1275,7 +1370,7 @@ export async function loadLineSimplified(baseName, move) {
     await openInLayer(`${baseName}-line_simplified.png`, 'line_simplified')
     if (move){
         const layer = getLayerByName('line_simplified')
-        await moveLayerToTop(layer._id)
+        await moveLayerToTop(layer)
     }    
 }
 

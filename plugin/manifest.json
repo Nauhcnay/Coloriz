@@ -18,19 +18,19 @@
         "default": "Coloriz"
       },
       "minimumSize": {
-        "width": 230,
-        "height": 300
+        "width": 200,
+        "height": 200
       },
       "maximumSize": {
-        "width": 2000,
-        "height": 2000
+        "width": 500,
+        "height": 600
       },
       "preferredDockedSize": {
-        "width": 230,
+        "width": 250,
         "height": 300
       },
       "preferredFloatingSize": {
-        "width": 230,
+        "width": 300,
         "height": 300
       },
       "icons": [
@@ -57,5 +57,12 @@
       "theme": ["all"],
       "species": ["generic"]
     }
-  ]
+  ],
+  "uiEntryPoints": [
+    {
+        "type": "menu",
+        "label": "Confirmation",
+        "commandId": "showConfirm"
+    }
+]
 }

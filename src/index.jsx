@@ -27,3 +27,9 @@ entrypoints.setup({
         main: panelController
     }
 });
+
+// module.exports = {
+//   commands: {
+//     showConfirm,
+//   },
+// };

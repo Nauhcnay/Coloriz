@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@adobe/react-spectrum": "^3.10.0",
+    "@adobe/xd-plugin-toolkit": "^0.0.1",
     "@material-ui/core": "^4.11.3",
     "@material-ui/icons": "^4.11.2",
     "@spectrum-web-components/slider": "^0.9.1",
@@ -37,6 +38,7 @@
     "copy-image-clipboard": "^1.0.1",
     "cross-env": "^7.0.2",
     "hex-to-hsl": "^1.0.2",
+    "image-size": "^1.0.0",
     "path": "^0.12.7",
     "react": "^16.8.6",
     "react-color": "^2.19.3",

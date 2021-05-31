@@ -72,6 +72,11 @@ import Input from '@material-ui/core/Input';
 /*
 local variables
 */
+
+const scroll = { overflowY: 'scroll'};
+const divSmall = { height:"20%" }
+const divLarge = { height:"60%" };
+
 // icons 
 // this is not work on sandbox
 const colorIcon = (props) => (
@@ -106,7 +111,7 @@ const theme = createMuiTheme({
 // https://material-ui.com/styles/api/#makestyles-styles-options-hook
 const useStyles = makeStyles((theme) => ({
     root: {
-      minWidth: 400,
+      minWidth: 300,
       height: '100vh',
       // width: '100%',
       // maxWidth: 360,
@@ -202,12 +207,20 @@ const BluewRadio = withStyles({
 })((props) => <Radio {...props} />);
 
 
-const ButtonStyle = {
+const ButtonStyleSmall = {
             color:"#9AE42C", 
             fontSize: 2,
             border: '1px solid',
-            width:70, 
+            width:90, 
             height:15};
+
+const ButtonStyleLarge = {
+            color:"#9AE42C", 
+            fontSize: 2,
+            border: '1px solid',
+            width:130, 
+            height:15};
+
 
 const AddButtonStyle = {
             fontSize: 2,
@@ -219,8 +232,17 @@ const TwoStateButton = (props) => (
         disabled={props.isLoading}
         onClick={props.onClick}
         variant='outlined'
-        style={ButtonStyle}>
+        style={ButtonStyleSmall}>
         {props.isLoading ? 'Loading...' : props.text}
+    </Button>
+);
+
+const TwoStateButtonFlat = (props) => (
+    <Button 
+        onClick={props.onClick}
+        variant='outlined'
+        style={ButtonStyleLarge}>
+        {props.isLoading ? "Reset Result" : "Show Result"}
     </Button>
 );
 
@@ -229,7 +251,7 @@ const ThreeStateButton = (props) => (
         disabled={props.isLoading === 0 ? true : false}
         onClick={props.onClick}
         variant='outlined'
-        style={ButtonStyle}>
+        style={ButtonStyleSmall}>
         {props.isLoading === 2? "Show" : props.text}
     </Button>
 );
@@ -292,7 +314,10 @@ function Panel() {
 
     const [isMerging, setIsMerging] = useState(false);
     const [isSplitting, setIsSplitting] = useState(false);
-    const [isFlatting, setIsFlatting] = useState(1);
+    // const [isFlatting, setIsFlatting] = useState(1);
+    const [isFlatting, setIsFlatting] = useState(false);
+    const [isInitail, setIsInitail] = useState(true);
+    const [flatClicked, setflatClicked] = useState(false);
     const [paletteChange, setPaletteChange] = React.useState(palette);
     const [selectedColor, setSelectedColor] = React.useState(null);
 
@@ -309,17 +334,23 @@ function Panel() {
     const mergeInstructionText = 'Brush over different segments that need to be merged. When ready, click Merge.'
     const splitInstructionText = 'Connect unconnected green lines where you with to split. When ready, click Split.'    
 
+    // useEffect(() => {
+    //     if (brushMode === 'merge') {
+    //         handleMergeToolClick(mergeBrushSize)
+    //     }
+    //     else if (brushMode === 'splitfine') {
+    //         handleFineSplitToolClick(splitBrushSize)
+    //     }
+    //     else if (brushMode === 'splitcoarse') {
+    //         handleCoarseSplitToolClick(mergeBrushSize)
+    //     }
+    // }, [brushMode]);
+    
+    // useEffect is a hook to call after state variables updated
     useEffect(() => {
-        if (brushMode === 'merge') {
-            handleMergeToolClick(mergeBrushSize)
-        }
-        else if (brushMode === 'splitfine') {
-            handleFineSplitToolClick(splitBrushSize)
-        }
-        else if (brushMode === 'splitcoarse') {
-            handleCoarseSplitToolClick(mergeBrushSize)
-        }
-    }, [brushMode])
+        if (scenes.length > 0)
+            tryFlat();
+    }, [scenes]);
 
     const BrushRadioGroup = (
         <FormControl component="fieldset">
@@ -337,23 +368,24 @@ function Panel() {
     // const MergeButton = <TwoStateButton onClick={tryMerge} text="Merge" isLoading={isMerging}/>
     // const SplitButtonFine = <TwoStateButton onClick={trySplitFine} text="Fine Split" isLoading={isSplitting}/>
     // const SplitButtonCoarse = <TwoStateButton onClick={trySplitCoarse} text="Coarse Split" isLoading={isSplitting}/>
-    const FlatButton = <ThreeStateButton onClick={tryFlat} isLoading={isFlatting} text={isFlatting === 0 ? "Loading" : "Flat"}/>
+    //const FlatButton = <ThreeStateButton onClick={tryFlat} isLoading={isFlatting} text={isFlatting === 0 ? "Loading" : "Flat"}/>
+    const FlatButton = <TwoStateButtonFlat onClick={showFlat} isLoading={flatClicked}/>
     
-    const SavePaletteButtom = () => {
+    const SavePaletteButton = () => {
         return (
         <Button
             variant="outlined"
-            style={ButtonStyle} 
+            style={ButtonStyleSmall} 
             onClick={savePalette}>
         Save
         </Button>)
     };
 
-    const LoadPaletteButtom = () => {
+    const LoadPaletteButton = () => {
         return (
         <Button 
             variant="outlined"
-            style={ButtonStyle} 
+            style={ButtonStyleSmall} 
             onClick={readPalette}>
         Load
         </Button>)
@@ -363,16 +395,14 @@ function Panel() {
         return (
         <Button 
             variant="outlined"
-            style={ButtonStyle} 
+            style={ButtonStyleSmall} 
             onClick={()=>handleFineSplitToolClick(3)}>
         Start
         </Button>)
     };
     const handleBrushSizeChange = (event) => {
-        // alert("test");
-        document.querySelector("#mergeSlider").value = Number(event.target.value)
-        document.querySelector("#mergeText").value = Number(event.target.value)
-        // setMergeBrushSize(event.target.value);
+        document.querySelector("#mergeSlider").value = Number(event.target.value);
+        document.querySelector("#mergeText").value = Number(event.target.value);
     };
 
     const handleInputChange = () => {
@@ -381,7 +411,6 @@ function Panel() {
     };
 
     const handleBlur = () => {
-        // setMergeBrushSize(document.querySelector("#mergeSlider").value)
         handleMergeToolClick(document.querySelector("#mergeSlider").value);
     };
 
@@ -406,54 +435,55 @@ function Panel() {
         await file.write(paletteText);
 
     }
+    async function showFlat(){
+        // setIsFlatting(0)
+        console.log("Display current flatting result...")
+        try {
+            await flatSingle();
+            setflatClicked(true);
+        }
+        catch (e) {
+            console.log(e)
+        }
+        // setIsFlatting(2)
+    };
 
     async function tryFlat() {
-        if (isFlatting === 1){
-            let updatedScenes = scenes;
-            setIsFlatting(0);
-            console.log("Flatting all loaded images...");
-            // await flatAllBackground(scenes);    
-            // flat all images in the opened scenes
-            setFlatting(true);
-            var i;
-            for (i = 0; i < updatedScenes.length; i++){
-                console.log('Flatting image: ' + updatedScenes[i].fileName);
-                try{
-                    if (updatedScenes[i].flatted === false){
-                        updatedScenes = await flatSingleBackground(i, updatedScenes);
-                        setScenes(updatedScenes);
-                        scenesGlobal = updatedScenes;
-                        if (app.activeDocument._id == updatedScenes[i].documentID){
-                            setIsFlatting(2);
-                        }
+        let updatedScenes = scenes;
+        setIsFlatting(true);
+        console.log("Flatting all loaded images...");
+        // await flatAllBackground(scenes);    
+        // flat all images in the opened scenes
+        // setFlatting(true);
+        var i;
+        for (i = 0; i < updatedScenes.length; i++){
+            console.log('Flatting image: ' + updatedScenes[i].fileName);
+            try{
+                if (updatedScenes[i].flatted === false){
+                    updatedScenes = await flatSingleBackground(i, updatedScenes);
+                    setScenes(updatedScenes);
+                    scenesGlobal = updatedScenes;
+                    if (app.activeDocument._id == updatedScenes[i].documentID){
+                        setIsFlatting(false);
                     }
-                    continue;
                 }
-                catch (e){
-                    console.log(e);
-                    setFlatting(false);
-                }
+                continue;
             }
-            setFlatting(false);
+            catch (e){
+                console.log(e);
+                setFlatting(false);
+            }
         }
-        // what this branch does?
-        else if (isFlatting === 2){
-            setIsFlatting(0)
-            console.log("Display current flatting result...")
-            try {
-                await flatSingle()
-            }
-            catch (e) {
-                console.log(e)
-            }
-            setIsFlatting(2)
-        }
+        console.log("Flatting finished")
+        setIsFlatting(false);
+
     }
 
     async function tryMerge() {
         setIsMerging(true)
         try {
-            await merge()
+            await merge();
+            
         }
         catch (e) {
             console.log(e)
@@ -560,21 +590,30 @@ function Panel() {
             console.log('Flatting done!')
             
             console.log('Loading result');
-            if (await createLinkLayer("fill_neural", image) === null){
+            if (await createLinkLayer("result_neural", image, true) === null){
                 return null;
             }
             console.log('Loading line art');
-            if (await createLinkLayer("line_artist", line_artist) === null){
+            if (await createLinkLayer("line_artist", line_artist, true) === null){
                 return null;
             }
             console.log('Loading line hint');
-            if (await createLinkLayer("line_hint", line_hint) === null){
+            if (await createLinkLayer("line_hint", line_hint, true) === null){
                 return null;
             }
             console.log('Loading line simple');
-            if (await createLinkLayer("line_simplified", line_simplified) === null){
+            if (await createLinkLayer("line_simplified", line_simplified, true) === null){
                 return null;
             }
+            // update the scenes click state
+            let sceneNew = scenes.map(scene=>{
+                if (scene.clicked === false){
+                    scene.clicked = true;
+                    return scene;
+                }
+                else
+                    return scene;
+            })
         }
         catch (e){
             app.showAlert("Flatting error, please reload this image to retry")
@@ -623,7 +662,7 @@ function Panel() {
         console.log('Merging done!')
 
         console.log('Loading result');
-        let newLayer = await createLinkLayer("fill_neural", image);
+        let newLayer = await createLinkLayer("result_neural", image);
         if (newLayer === null){
             return null;
         }
@@ -707,7 +746,7 @@ function Panel() {
         console.log('Splitting done!')
 
         console.log('Loading result');
-        let newLayer = await createLinkLayer("fill_neural", image);
+        let newLayer = await createLinkLayer("result_neural", image);
         if (newLayer === null){
             return null;
         }
@@ -791,7 +830,7 @@ function Panel() {
         console.log('Splitting done!');
 
         console.log('Loading result');
-        let newLayer = await createLinkLayer("fill_neural", image);
+        let newLayer = await createLinkLayer("result_neural", image);
         if (newLayer === null){
             return null;
         }
@@ -858,20 +897,25 @@ function Panel() {
 
     async function loadNewScenes() {
         const newScenes = await readFiles();
+        setIsFlatting(false);
         setScenes([...scenes, ...newScenes]);
-        setIsFlatting(1);
-        StartFlatting = false;
+        // StartFlatting = false;
+        // tryFlat();
     }
 
     async function listener(event, descriptor){
         if (event === 'close') {
-            const { documentID } = descriptor
-            removeSceneByID(documentID)
+            const { documentID } = descriptor;
+            removeSceneByID(documentID);
         }
         if (event === 'open'){
             // if we can't 
-            console.log('we are here!')
+            console.log('we are here!');
         }
+        if (event === 'select'){
+            console.log("some doc is seleted!");
+        }
+
      }
 
     function removeSceneByID(docID){
@@ -889,7 +933,10 @@ function Panel() {
             },
             {
                 event: "open"
-            } // any other events...
+            }, // any other events...
+            {
+                event: "select"
+            },
         ], listener);
     }, [])
 
@@ -908,7 +955,7 @@ function Panel() {
         setSelectedColor(name+hex);
         await activatePaintBucket()
         await setColor(hex)
-        handleMergeToolClick(mergeBrushSize);
+        handleMergeToolClick(document.querySelector("#mergeSlider").value);
     }
 
     const ColorBlob = ({name, hex, selected }) => {
@@ -925,7 +972,7 @@ function Panel() {
     const PaletteGrid = ({p})=>{
         return (
         <>
-            {p.name}
+            <br/>{p.name}
             <Grid item xs={12} style={{ display: 'flex' }}>
                 <Grid container justify="flex-start" spacing={1}>
                     {p.colors.map(hex => <ColorBlob key={hex} hex={hex} selected={selectedColor} name={p.name}/>)}
@@ -935,29 +982,49 @@ function Panel() {
         )
     }
 
+    const InitailTab = ()=>{
+        return (<sp-body size="XS">
+                   1. Click "Add" on the left to add scenes.<br />
+                   2. Select one scene to start.
+                </sp-body>)
+    };
+
+    const WorkingTab = ()=>{
+        return (<sp-body size="XS">
+                   1. Click "Add" on the left to add scenes.<br />
+                   2. Preparing for flatting...
+                </sp-body>)
+    };
+
+    const ReadyTab = ()=>{
+        return (<sp-body size="XS">
+                   1. Click "Add" on the left to add scenes.<br />
+                   2. This scene is ready to flat. { FlatButton }<br />
+                   3. Pick a color from a palette and brush over segments. Once ready, press { ColorizeButton }
+                </sp-body>)
+    };
+
     const FlattingTab = (      
         //https://www.reactenlightenment.com/react-jsx/5.1.html
         // JSX allows us to put HTML into JavaScript.
         // https://reactjs.org/docs/introducing-jsx.html 
         <>
-            <div class="group" ><sp-label>Instruction</sp-label>
-            <sp-body size="XS">
-               1. Click "Add more line drawings" on the left to add scenes.<br />
-               2. Press "flat" button to auto flatting. <br />
-               3. When ready, press "show flatted" button to show result. { FlatButton }<br />
-               4. Pick a color from a palette and brush over segments. Once ready, press "colorize". { ColorizeButton } 
-            </sp-body>
+            <div class="group"><sp-label>Instruction</sp-label>
+                {isInitail? <InitailTab/> : (isFlatting ? <WorkingTab/> : <ReadyTab/>)}
             </div>
-            <div class="group" ><sp-label>Color</sp-label>
-            <sp-body size="XS">
-                <div xs={12} float="right">
-                   <LoadPaletteButtom/> <SavePaletteButtom/>
-                </div>
+            <div class="group"><sp-label>Palette</sp-label>
+            <sp-body size="XS" >
+                <div xs={12} style={scroll}>
                 {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
+                </div>
+                <div xs={12} align="left">
+                   <LoadPaletteButton/> <SavePaletteButton/>
+                </div>
+                <br/>
             </sp-body>
             </div>
-            <div class="group" ><sp-label>Brush</sp-label>
-            <sp-body >
+            <div class="group"><sp-label>Brush</sp-label>
+            <sp-body>
                 {/*<Slider
                     labelPosition="side"
                     label="Size"
@@ -1153,7 +1220,7 @@ function Panel() {
                         width="100%"
                         height="93"
                     />
-                <Grid container xs={12} justify="flex-start">
+                <Grid container justify="flex-start">
                     <Grid item xs={6}>
                         <StartTuningButtom></StartTuningButtom>
                     </Grid>
@@ -1172,12 +1239,16 @@ function Panel() {
     return (
         <Grid container className={classes.root}>
             
-            <Grid item xs={4} className={classes.scenes}>
+            <Grid item xs={5} className={classes.scenes}>
                 <Scenes scenes={scenes}
                         activeScene={activeScene}
                         setActiveScene={setActiveScene}
                         setIsFlatting={setIsFlatting}
-                        startFlatting={getFlatting}/>
+                        startFlatting={getFlatting}
+                        setIsInitail={setIsInitail}
+                        setScenes={setScenes}
+                        getScenes={getScenes}
+                        setflatClicked={setflatClicked}/>
                 <Button 
                     onClick={loadNewScenes}
                     style={AddButtonStyle}>
@@ -1186,7 +1257,7 @@ function Panel() {
             </Grid>
 
             {/*<Grid item container xs={6} style={{ padding: 10 }}>*/}
-            <Grid item container xs={8}>
+            <Grid item container xs={7}>
                 <Grid>
                     <StyledTabs
                         value={tab}
