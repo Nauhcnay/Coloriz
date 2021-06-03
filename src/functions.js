@@ -725,6 +725,13 @@ async function showConfirm(doc, w_new, h_new, th) {
   case 1:
     /* User clicked Enable */
     // resize locally is difficult, let's do it at the backend
+    const resizeFolderToken = await localStorage.getItem("resizeFolder");
+    const resizeFolder = await fs.getEntryForPersistentToken(resizeFolderToken);
+    const FileNameBP = doc.title.lastIndexOf(".");
+    const saveFileName = doc.title.substr(0, FileNameBP) + "_resized.psd";
+    const file = await resizeFolder.createFile(saveFileName, {overwrite: true});
+    doc.save(file);
+    doc.resizeImage(w_new, h_new);
     return true;
 }
 
@@ -742,8 +749,8 @@ export async function readFiles() {
     files.forEach(async (file) => {
         const fileName = file.name;
         const path = file.nativePath.replace(fileName, '');
-        // const tempFolder = fs.createEntry(path + fileName, {type:st.types.folder})
-        // let token = await fs.createPersistentToken(tempFolder);
+        // const workingFolder = fs.createEntry(path, {type:st.types.folder})
+        // let token = await fs.createPersistentToken(workingFolder);
         
         // https://www.adobe.io/xd/uxp/uxp/reference-js/Global%20Members/Data%20Storage/LocalStorage/
         // accroding to the link above, localStorage can only stroe string
@@ -830,12 +837,18 @@ async function setPersistentFolder() {
         let tempPath = "/tmp/";
         app.showAlert("Can't detect the platform type, please choose the temporary folder path manually");
     }
-    
+    await sleep(1000);
     // copy the path to clipboard
-    let entry = await fs.getFolder(); 
-    let token = await fs.createPersistentToken(entry);
-    localStorage.setItem("persistentFolder", token);
-    localStorage.setItem("persistentPath", entry.nativePath);
+    let entry1 = await fs.getFolder(); 
+    let token1 = await fs.createPersistentToken(entry1);
+    localStorage.setItem("persistentFolder", token1);
+    localStorage.setItem("persistentPath", entry1.nativePath);
+    app.showAlert("Please select the resize folder");
+    await sleep(1000);
+    let entry2 = await fs.getFolder(); 
+    let token2 = await fs.createPersistentToken(entry2);
+    localStorage.setItem("resizeFolder", token2);
+    localStorage.setItem("resizePath", entry2.nativePath);
 
 }
 
@@ -1038,7 +1051,7 @@ export async function moveSimplifiedLayerBack(layerTarget){
 }
 
 export async function moveArtistLayerBack(layerTarget){
-    let backingLayer = getLayerByName("result");
+    let backingLayer = getLayerByName("result_neural");
     await moveAboveTo(layerTarget, backingLayer);  
 }
 

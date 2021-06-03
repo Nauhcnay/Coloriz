@@ -257,9 +257,11 @@ const ThreeStateButton = (props) => (
 );
 
 const colors_test = ['#4D4D4D', '#999999', '#FFFFFF', '#F44E3B', '#FE9200', '#FCDC00', '#DBDF00', '#A4DD00', '#68CCCA', '#73D8FF', '#AEA1FF', '#FDA1FF'];
+const colors_test_map_1 = colors_test.map((c)=>{return {"label": "label a", "color":c}})
+const colors_test_map_2 = colors_test.map((c)=>{return {"label": "label b", "color":c}})
 let palette = [
-                    {'name':'palette A', 'colors':colors_test}, 
-                    {'name':'palette B','colors':colors_test}
+                    {'name':'palette A', 'colors':colors_test_map_1}, 
+                    {'name':'palette B','colors':colors_test_map_2}
                 ];
 
 
@@ -320,6 +322,9 @@ function Panel() {
     const [flatClicked, setflatClicked] = useState(false);
     const [paletteChange, setPaletteChange] = React.useState(palette);
     const [selectedColor, setSelectedColor] = React.useState(null);
+    const [colorLabel, setColorLabel] = React.useState("Please select one color");
+    const [selectedPalette, setSelectedPalette] = React.useState(null);
+
 
 
     const [brushMode, setBrushMode] = useState('merge');
@@ -515,14 +520,15 @@ function Panel() {
     async function flatSingleBackground(index, updatedScenes){
         // read data from selected input
         // const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
-        const { fileName, documentID, base64String } = updatedScenes[index];
+        const { fileName, documentID, base64String,resize } = updatedScenes[index];
         
         // convert readed data to the input format of API
         const data = {
             image: base64String,
             net: 512,
             radius: 1,
-            preview: false
+            preview: false,
+            resize
         }
 
         // construct the server API entrance
@@ -607,7 +613,7 @@ function Panel() {
             }
             // update the scenes click state
             let sceneNew = scenes.map(scene=>{
-                if (scene.clicked === false){
+                if (scene.clicked === false && scene.documentID === app.activeDocument._id){
                     scene.clicked = true;
                     return scene;
                 }
@@ -909,11 +915,12 @@ function Panel() {
             removeSceneByID(documentID);
         }
         if (event === 'open'){
-            // if we can't 
+            // is it necessary to do this?
             console.log('we are here!');
         }
         if (event === 'select'){
-            console.log("some doc is seleted!");
+            setActiveScene(app.activeDocument._id);
+            // console.log("some doc is seleted!");
         }
 
      }
@@ -951,31 +958,34 @@ function Panel() {
                 return SplitButtonCoarse; 
             }}
     
-    const handleColorBlobClick = async(name, hex) => {
-        setSelectedColor(name+hex);
-        await activatePaintBucket()
-        await setColor(hex)
+    const handleColorBlobClick = async(name, color) => {
+        setSelectedColor(name+color);
+        await activatePaintBucket();
+        await setColor(color);
+        // await setColorLabel("this worked!");
         handleMergeToolClick(document.querySelector("#mergeSlider").value);
     }
-
-    const ColorBlob = ({name, hex, selected }) => {
-        if (selected === name+hex)
+ 
+    const ColorBlob = ({name, color, selected, label }) => {
+        if (selected === name+color){
+            setColorLabel(label);
+            setSelectedPalette(name);
             return (
                 <Badge color="primary" variant="dot" invisible={false}>
-                    <Grid onClick={() => handleColorBlobClick(name, hex)} style={{ backgroundColor: hex, width: 20, height: 20, margin: 2}}/>
+                    <Grid onClick={() => handleColorBlobClick(name, color)} style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}/>
                 </Badge>
-            );
+            );}
         else
-            return <Grid onClick={() => handleColorBlobClick(name, hex)} style={{ backgroundColor: hex, width: 20, height: 20, margin: 2}}/>;
+            return <Grid onClick={() => handleColorBlobClick(name, color)} style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}/>;
     }
     
     const PaletteGrid = ({p})=>{
         return (
         <>
-            <br/>{p.name}
+            <br/>{p.name}: {selectedPalette === p.name? colorLabel:""}
             <Grid item xs={12} style={{ display: 'flex' }}>
                 <Grid container justify="flex-start" spacing={1}>
-                    {p.colors.map(hex => <ColorBlob key={hex} hex={hex} selected={selectedColor} name={p.name}/>)}
+                    {p.colors.map(color => <ColorBlob key={color.color} color={color.color} selected={selectedColor} name={p.name} label={color.label}/>)}
                 </Grid>
             </Grid>
         </>
