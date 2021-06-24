@@ -28,18 +28,7 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
-function showResizeConfirm(){
-    document.querySelector("#dlgExample").uxpShowModal({
-    title: "Continue to close?",
-    resize: "none", // "both", "horizontal", "vertical",
-    size: {
-      width: 480,
-      height: 240
-    }
-  });
-}
-
-async function removeScene(id, getScenes, setScenes){
+async function removeScene(id, getScenes, setScenes, setIsInitail){
     const feedback = await confirm(
           "Close this work?", //[1]
           `Please makesure you have saved all works before continue`, //[2]
@@ -56,16 +45,23 @@ async function removeScene(id, getScenes, setScenes){
         const scenes = getScenes();
         const newScenes = scenes.filter(scene => scene.documentID !== id);
         setScenes(newScenes);
+        setIsInitail(true);
     }
     
 }
 
 
-function Scene({ fileName, id, image, activeScene, setActiveScene, setIsFlatting, flatted, startFlatting, setIsInitail, getScenes, setScenes, setflatClicked }) {
+function Scene({ fileName, id, image, activeScene, setActiveScene, 
+                setIsFlatting, flatted, startFlatting, setIsInitail, 
+                getScenes, setScenes, setflatClicked, isShowing,
+                showFlat}) {
 
     const classes = useStyles();
    
     const setActiveDocument = () => {
+        // if the showflat function is working, disable all selection
+        if (isShowing)
+            return null;
         setIsInitail(false);
         const activeDoc = app.documents.filter(doc => doc._id === id)[0]
         app.activeDocument = activeDoc;
@@ -78,6 +74,19 @@ function Scene({ fileName, id, image, activeScene, setActiveScene, setIsFlatting
                 setflatClicked(true);
             else
                 setflatClicked(false);
+
+            if (selectedScene.displayed === false){
+                showFlat();
+                const scenesNew = scenes.map((s)=>{
+                    if (s.documentID === id){
+                        s.displayed = true;
+                        return s;
+                    }
+                    else
+                        return s;
+                })
+                setScenes(scenesNew);    
+            }
         }
         else
             setIsFlatting(true);
@@ -93,6 +102,8 @@ function Scene({ fileName, id, image, activeScene, setActiveScene, setIsFlatting
         // else{
         //     setIsFlatting(1) // set button to "flat"
         // }
+        
+        
     }
     const fileURL = `data:image/png;base64, ${image}`;
     
@@ -126,7 +137,7 @@ function Scene({ fileName, id, image, activeScene, setActiveScene, setIsFlatting
                     aria-label="delete" 
                     size="small" 
                     style={{width: 30, height: 20, padding: 0, color:"#fff"}}
-                    onClick={()=>removeScene(id, getScenes, setScenes)}>
+                    onClick={()=>removeScene(id, getScenes, setScenes, setIsInitail)}>
                   x
                 </IconButton>
             </ListItemSecondaryAction>
@@ -135,14 +146,20 @@ function Scene({ fileName, id, image, activeScene, setActiveScene, setIsFlatting
     )
 }
 
-export default function Scenes({ scenes, activeScene, setActiveScene, setIsFlatting, startFlatting, setIsInitail, getScenes, setScenes, setflatClicked}) {
+export default function Scenes({ scenes, activeScene, setActiveScene, setIsFlatting, startFlatting, 
+                                setIsInitail, getScenes, setScenes, setflatClicked, isShowing,
+                                showFlat}) {
     const classes = useStyles();
     return (
-        <List component="nav" className={classes.root} aria-label="mailbox folders">
+        <List component="nav" 
+              className={classes.root} 
+              aria-label="mailbox folders"
+              style={{height:"300px",
+                    overflowY:"scroll"}}>
             {scenes.map((scene) => <Scene activeScene={activeScene}
                                         setActiveScene={setActiveScene}
                                         key={scene.documentID}
-                                        image={scene.image}
+                                        image={scene.image[scene.historyIndex]}
                                         id={scene.documentID}
                                         fileName={scene.fileName}
                                         setIsFlatting={setIsFlatting}
@@ -151,7 +168,9 @@ export default function Scenes({ scenes, activeScene, setActiveScene, setIsFlatt
                                         setIsInitail={setIsInitail}
                                         getScenes={getScenes}
                                         setScenes={setScenes}
-                                        setflatClicked={setflatClicked}/>)}
+                                        setflatClicked={setflatClicked}
+                                        isShowing={isShowing}
+                                        showFlat={showFlat}/>)}
         </List>
       );
 }

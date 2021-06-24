@@ -69,6 +69,7 @@ export async function handleMergeToolClick(brushSize) {
             console.log("Moving merge hint layer to the top");
             await moveLayerToTop(mergeHintLayer, true);}
     }
+
     // Otherwise create it
     else {
         createMergeHintLayer()
@@ -478,8 +479,8 @@ export async function moveSplitHintToTop(){
 //     });
 // }
 
-export async function moveLayerToTop(layer, forEdit=false) {
-    let topLayer = app.activeDocument.layers[0];
+export async function moveLayerToTop(layer, forEdit=false, doc=app.activeDocument) {
+    let topLayer = doc.layers[0];
     if (topLayer._id !== layer._id)
         await moveAboveTo(layer, topLayer, forEdit);
 }
@@ -579,13 +580,13 @@ async function showAllLayers() {
     })
 }
 
-async function createLayer(name) {
-    const layer = await app.activeDocument.createLayer({ name })
+async function createLayer(name, doc=app.activeDocument) {
+    const layer = await doc.createLayer({ name })
     return layer
 }
 
-export function getLayerByName(name) {
-    const layers = app.activeDocument.layers;
+export function getLayerByName(name, doc=app.activeDocument) {
+    const layers = doc.layers;
     const filterResult = layers.filter(layer => layer.name === name)
     if (filterResult.length > 0) {
         return filterResult[0]
@@ -594,8 +595,6 @@ export function getLayerByName(name) {
 }
 
 async function renameActiveLayer(name) {
-    // 所以操作ps就只要send这样一个bactch play的命令就可以了，但是这个命令的定义会非常模糊
-    // 考虑修改这里需要极为慎重
     // https://www.adobe.io/photoshop/uxp/ps_reference/media/advanced/batchplay/    
     const result = await batchPlay(
     [
@@ -790,7 +789,7 @@ export async function readFiles() {
                 h_new = r*th;
             }
             // pop out a dialog to ask user to decide
-            resize = await showConfirm(app.activeDocument, w_new, h_new, th);
+            resize = await showConfirm(doc, w_new, h_new, th);
         }
         // 
         await sleep(300);
@@ -808,16 +807,30 @@ export async function readFiles() {
             documentID,
             fileName,
             base64String,
-            image: base64String,
+            image: [base64String],
             flatted: false,
+            displayed: false,
             resize,
-            clicked:false
+            clicked:false,
+            historyIndex: 0,
         }    
     }))
-    await ensurePersistentToken();
-    // return new scene
-    return newScenes;
+    if (await ensurePersistentToken()){
+        // return new scene
+        return newScenes;    
+    }
+    else{
+        return [];
+    }
+    
 }
+
+async function confirmContinue() {
+  /* we'll display a dialog here */
+  const feedback = await alert(
+          "Reset your flatting result?", //[1]
+          "If continue, this will reset all your works on this document") //[2]
+};
 
 // find the temp folder token
 async function setPersistentFolder() {
@@ -826,16 +839,40 @@ async function setPersistentFolder() {
     if (platform === "darwin"){
         let tempPath = "/tmp/";
         navigator.clipboard.writeText({"text/plain": tempPath});
-        app.showAlert("Please indicate the temporary folder path, using 'shift + command + g' and paste the temp folder path in the open file dailog, then click 'open'.");
+        let answer = await confirm(
+          "Please indicate the temporary folder path", //[1]
+          "Use 'shift + command + g' and paste the temp folder path in the next open file dailog, then click 'open'.",
+          ["Cancel", "Continue"]);
+        // app.showAlert("Please indicate the temporary folder path, using 'shift + command + g' and paste the temp folder path in the open file dailog, then click 'open'.");
+        if (answer.which === 0){
+            app.showAlert("The temp folder must be specified")
+            return false;
+        }
     }
-    else if (platform === "win"){
-        let tempPath = "%USERPROFILE%/AppData/Local/";
+    else if (platform === "win32"){
+        let tempPath = "c:\\temp\\flatting_temp";
         navigator.clipboard.writeText({"text/plain": tempPath});
-        app.showAlert("Please indicate the temporary folder path, paste the temp folder path in the open file dailog and click 'open'.");   
+        let answer = await confirm(
+          "Please indicate the temporary folder path", //[1]
+          "Paste the temp folder path in the open file dailog and click 'open'. If this folder does not exsit, please create them manually ",
+          ["No", "Yes"]);
+        // app.showAlert("Please indicate the temporary folder path, paste the temp folder path in the open file dailog and click 'open'.");   
+        if (answer.which === 0){
+            app.showAlert("The temp folder must be specified")
+            return false;
+        }
     }
     else {
         let tempPath = "/tmp/";
-        app.showAlert("Can't detect the platform type, please choose the temporary folder path manually");
+        let answer = await confirm(
+          "Please indicate the temporary folder path", //[1]
+          "Can't detect the platform type, please choose the temporary folder path manually",
+          ["No", "Yes"]);
+        // app.showAlert("Can't detect the platform type, please choose the temporary folder path manually");
+        if (answer.which === 0){
+            app.showAlert("The temp folder must be specified")
+            return false;
+        }
     }
     await sleep(1000);
     // copy the path to clipboard
@@ -843,12 +880,22 @@ async function setPersistentFolder() {
     let token1 = await fs.createPersistentToken(entry1);
     localStorage.setItem("persistentFolder", token1);
     localStorage.setItem("persistentPath", entry1.nativePath);
-    app.showAlert("Please select the resize folder");
+    let answer = await confirm(
+      "Please indicate the resize folder path", //[1]
+      "Resize folder is the path which stroes resized image if its size is too large",
+      ["No", "Yes"]);
+    // app.showAlert("Can't detect the platform type, please choose the temporary folder path manually");
+    if (answer.which === 0){
+        app.showAlert("The resize folder must be specified")
+        return false;
+    }
+    // app.showAlert("Please select the resize folder");
     await sleep(1000);
     let entry2 = await fs.getFolder(); 
     let token2 = await fs.createPersistentToken(entry2);
     localStorage.setItem("resizeFolder", token2);
     localStorage.setItem("resizePath", entry2.nativePath);
+    return true;
 
 }
 
@@ -856,19 +903,27 @@ async function setPersistentFolder() {
 export async function ensurePersistentToken() {
     const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
     const thePersistentFolderPath = await localStorage.getItem("persistentPath");
+    const theResizeFolderToken = await localStorage.getItem("resizeFolder");
     if (thePersistentFolderToken === "undefined" || thePersistentFolderPath === "undefined" ||
-        thePersistentFolderToken === null || thePersistentFolderPath === null ) {
-        setPersistentFolder();
+        thePersistentFolderToken === null || thePersistentFolderPath === null ||
+        theResizeFolderToken === null || theResizeFolderToken === "undefined") {
+        return setPersistentFolder();
     }
+    return true;
 }
 
 // Get an existing file using persistent token
 async function getExistingFile(fileName) {
-    await ensurePersistentToken();
-    const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
-    const thePersistentFolder = await fs.getEntryForPersistentToken(thePersistentFolderToken);
-    const file = await thePersistentFolder.getEntry(fileName);
-    return file;
+    if (await ensurePersistentToken()){
+        const thePersistentFolderToken = await localStorage.getItem("persistentFolder");
+        const thePersistentFolder = await fs.getEntryForPersistentToken(thePersistentFolderToken);
+        const file = await thePersistentFolder.getEntry(fileName);
+        return file;    
+    }
+    else{
+        return false;
+    }
+    
 }
 
 // Create a new file using persistent token
@@ -965,10 +1020,15 @@ export async function saveMergeHintLayer() {
     // await saveVisibleLayer('merge-hint.png')
     // await showAllLayers();
 
-    await saveLayerByName('merge-hint', 'merge-hint.png');
-    // clear the content in this layer
-    let layer = await cleanLayerbyName('merge-hint');
-    return layer;
+    if (await saveLayerByName('merge-hint', 'merge-hint.png')){
+        // clear the content in this layer
+        let layer = await cleanLayerbyName('merge-hint');
+        return layer;    
+    }
+    else{
+        return false;
+    }
+    
 }
 
 export async function saveLineArtistLayer() {
@@ -991,10 +1051,14 @@ export async function saveFineSplitHintLayer() {
     // await saveVisibleLayer('split-hint-fine.png')
     // await showAllLayers();
 
-    await saveLayerByName('split-hint', 'split-hint-fine.png');
-    // clear the content in this layer
-    let layer = await cleanLayerbyName('split-hint');
-    return layer;
+    if (await saveLayerByName('split-hint', 'split-hint-fine.png')){
+        // clear the content in this layer
+        let layer = await cleanLayerbyName('split-hint');
+        return layer;
+    }
+    else
+        return false;
+    
 }
 
 // Save the split hint layer using "saveVisibleLayer"
@@ -1013,32 +1077,63 @@ export async function saveCoarseSplitHintLayer() {
 
 // save the layer's content of current active document to png
 async function saveLayerByName(layerName, fileName){
-    await hideAllLayersExcept(layerName);
-    let entry = await createNewFile(fileName);
-    await app.activeDocument.save(entry);
-    await showAllLayers();
+    if (await hideAllLayersExcept(layerName)){
+        let entry = await createNewFile(fileName);
+        await app.activeDocument.save(entry);
+        await showAllLayers();
+        return true;
+    }
+    else
+    {
+        app.showAlert("Please select a color in the palette to start colorize");
+        return false;
+    }
+    
 }
 
 async function hideAllLayersExcept(layerName){
-    await hideAllLayers();
     let currLayer = await getLayerByName(layerName);
-    currLayer.visible = true;
+    if (currLayer === false){
+        return false
+    }
+    else{
+        await hideAllLayers();
+        currLayer.visible = true;
+        return true    
+    }
+    
 }
 
-async function cleanLayerbyName(layerName, moveToTop = true){
-    let layer = getLayerByName(layerName);
+async function cleanLayerbyName(layerName, moveToTop = true, doc=app.activeDocument){
+    let layer = getLayerByName(layerName, doc);
     if (layer.locked){
         layer.selected = true; // we need to select the layer before doing any operation on it
         layer.locked = false;
     }
     await layer.delete();
-    layer = await createLayer(layerName);
+    layer = await createLayer(layerName, doc);
     // move the layer to the top, so user's input will before everything
     if (moveToTop){
-        await moveLayerToTop(layer, true);    
+        await moveLayerToTop(layer, true, doc);    
     }
     return layer;
 }
+
+async function cleanLayer(layer, moveToTop = true, doc=app.activeDocument){
+    if (layer.locked){
+        layer.selected = true; // we need to select the layer before doing any operation on it
+        layer.locked = false;
+    }
+    let name = layer.name; 
+    await layer.delete();
+    layer = await createLayer(name, doc);
+    // move the layer to the top, so user's input will before everything
+    if (moveToTop){
+        await moveLayerToTop(layer, true, doc);
+    }
+    return layer;
+}
+
 
 export async function moveResultLayerBack(layerTarget){
     let backingLayer = getLayerByName("line_artist");
@@ -1050,12 +1145,18 @@ export async function moveSimplifiedLayerBack(layerTarget){
     await moveAboveTo(layerTarget, backingLayer);  
 }
 
+export async function moveLineHintLayerBack(layerTarget){
+    let backingLayer = getLayerByName("line_artist");
+    await moveAboveTo(layerTarget, backingLayer);  
+}
+
 export async function moveArtistLayerBack(layerTarget){
     let backingLayer = getLayerByName("result_neural");
     await moveAboveTo(layerTarget, backingLayer);  
 }
 
-async function moveAboveTo(layerTarget, backingLayer, forEdit=false){
+export async function moveAboveTo(layerTarget, backingLayer, forEdit=false){
+    let isLocked = layerTarget.locked;
     backingLayer.selected = true;
     layerTarget.selected = true;
     backingLayer.locked = false;
@@ -1064,7 +1165,7 @@ async function moveAboveTo(layerTarget, backingLayer, forEdit=false){
     layerTarget.moveAbove();
     backingLayer.locked = true;
     backingLayer.selected = false;
-    if (forEdit){
+    if (forEdit || isLocked===false){
         layerTarget.locked = false;
         layerTarget.selected = true;    
     }
@@ -1097,7 +1198,8 @@ async function moveBelowTo(layerTarget, frontLayer, forEdit=false){
 }
 ////////////////////////////////////////////////////
 // working area
-export async function createLinkLayer(layerName, img, refresh=false){
+export async function createLinkLayer(layerName, img, 
+    refresh=false, locked=true, select=false, doc=app.activeDocument, fix=true){
     // get the action name
     // we have to do this because it is almost impossible to add image into a layer directly
     let actionName = await localStorage.getItem("actionName");
@@ -1111,17 +1213,16 @@ export async function createLinkLayer(layerName, img, refresh=false){
         localStorage.setItem("imgTemp", imgTemp);
     }
     // find if the layer has exists already
-    let newLayer = await getLayerByName(layerName);
+    var newLayer = await getLayerByName(layerName);
     // create new layer with given name if not exsits
     if (newLayer === false){
-        newLayer = await app.activeDocument.createLayer({name: layerName});
-        // if this is new layer, move it to the top
+        newLayer = await doc.createLayer({name: layerName});
+        // since this is new layer, move it to the top
         await moveLayerToTop(newLayer, true)
     }
     else{
-        newLayer = await cleanLayerbyName(layerName, refresh);
+        newLayer = await cleanLayer(newLayer, refresh);
         // if this is existing layer, move it to the right position
-        // or... do we really need to?
     }
     // convert to smartobject layer
     await activeLayerToSmartobject();
@@ -1139,18 +1240,56 @@ export async function createLinkLayer(layerName, img, refresh=false){
     newLayer = getLayerByName(imgTemp.replace(".png", ""));
     newLayer.selected = true;
     newLayer.name = layerName;
-    newLayer.locked = true;
-    newLayer.selected = false;
-    // I don't want to figure out why, but just put a dirty fix here 
-    if (layerName === "result_neural" )
-    {
-        let bottomLayer = app.activeDocument.layers[app.activeDocument.layers.length - 1];
-        await moveAboveTo(newLayer, bottomLayer);
-        // for( let i = 0; i < app.activeDocument.layers.length - 2; i++){
-        //     newLayer.moveBelow();
-        // }
+    if (layerName === "result_neural"){
+        if (fix){
+            // find the first group layer
+            let bottomLayers = doc.layerTree.filter((layer)=>layer.isGroupLayer);
+            if (bottomLayers.length > 0){
+                bottomLayer = doc.layerTree[0];
+            }
+            else
+                bottomLayer = doc.layers[doc.layers.length - 1];
+            // I don't want to figure out why, but just put a dirty fix here... 
+            await moveAboveTo(newLayer, bottomLayer);
+        }
         
+        newLayer.locked = false;
+        const batchPlay = photoshop.action.batchPlay;
+        const result = await batchPlay(
+        [
+           {
+              "_obj": "set",
+              "_target": [
+                 {
+                    "_ref": "layer",
+                    "_enum": "ordinal",
+                    "_value": "targetEnum"
+                 }
+              ],
+              "to": {
+                 "_obj": "layer",
+                 "mode": {
+                    "_enum": "blendMode",
+                    "_value": "multiply"
+                 }
+              },
+              "_isCommand": true,
+              "_options": {
+                 "dialogOptions": "dontDisplay"
+              }
+           }
+        ],{
+           "synchronousExecution": false,
+           "modalBehavior": "fail"
+        });
     }
+    else{
+        newLayer.locked = locked;
+        newLayer.selected = select;    
+    }
+    
+    
+    
     return newLayer;
 }    
 

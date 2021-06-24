@@ -18,20 +18,20 @@
         "default": "Coloriz"
       },
       "minimumSize": {
-        "width": 200,
-        "height": 200
+        "width": 350,
+        "height": 250
       },
       "maximumSize": {
-        "width": 500,
-        "height": 600
+        "width": 450,
+        "height": 350
       },
       "preferredDockedSize": {
-        "width": 250,
-        "height": 300
+        "width": 350,
+        "height": 250
       },
       "preferredFloatingSize": {
-        "width": 300,
-        "height": 300
+        "width": 450,
+        "height": 350
       },
       "icons": [
         {
