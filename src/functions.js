@@ -160,7 +160,7 @@ export async function handleCoarseSplitToolClick(brushSize) {
     await setColorYellow();
 }
 
-async function activatePencil() {
+export async function activatePencil() {
     const result = await batchPlay(
     [
     {
@@ -204,7 +204,7 @@ async function activateBrush() {
     
 }
 
-async function setBrushSize(size) {
+export async function setBrushSize(size) {
     const result = await batchPlay(
     [
     {
@@ -223,7 +223,7 @@ async function setBrushSize(size) {
                 "_value": size
             }
         },
-        "_isCommand": false,
+        "_isCommand": true,
         "_options": {
             "dialogOptions": "dontDisplay"
         }
@@ -232,6 +232,7 @@ async function setBrushSize(size) {
     "synchronousExecution": false,
     "modalBehavior": "fail"
     });
+
 
 }
 
@@ -479,8 +480,16 @@ export async function moveSplitHintToTop(){
 //     });
 // }
 
-export async function moveLayerToTop(layer, forEdit=false, doc=app.activeDocument) {
-    let topLayer = doc.layers[0];
+export async function moveLayerToTop(layer, forEdit=false, layerGroup=app.activeDocument.layers) {
+    let topLayer;
+    const doc = app.activeDocument;
+    if (layerGroup.isGroupLayer){
+        topLayer = layerGroup.children[0];
+    }
+    else{
+        topLayer = doc.layers[0];
+    }
+        
     if (topLayer._id !== layer._id)
         await moveAboveTo(layer, topLayer, forEdit);
 }
@@ -573,11 +582,16 @@ async function hideAllLayers() {
 }
 
 // show all layers in current active document
-async function showAllLayers() {
-    const layers = app.activeDocument.layers;
-    layers.forEach(layer => {
-        layer.visible = true
-    })
+async function showAllLayers(layerGroup=app.activeDocument.layers) {
+    if (layerGroup.isGroupLayer){
+        layerGroup.children.forEach(layer => {
+            layer.visible = true
+        })
+        layerGroup.visible = true;
+    }
+    else{
+        layerGroup.forEach(layer=>{layer.visible=true})
+    }
 }
 
 async function createLayer(name, doc=app.activeDocument) {
@@ -585,13 +599,20 @@ async function createLayer(name, doc=app.activeDocument) {
     return layer
 }
 
-export function getLayerByName(name, doc=app.activeDocument) {
-    const layers = doc.layers;
-    const filterResult = layers.filter(layer => layer.name === name)
+export function getLayerByName(name, layerGroup=app.activeDocument.layers) {
+    // this function need to be improved
+    // get the layer in first layer group
+    let layers;
+    if (layerGroup.isGroupLayer)
+        layers = layerGroup.children;
+    else
+        layers = layerGroup;
+
+    const filterResult = layers.filter(layer => layer.name === name);
     if (filterResult.length > 0) {
-        return filterResult[0]
+        return filterResult[0];
     }
-    return false
+    return false;
 }
 
 async function renameActiveLayer(name) {
@@ -713,8 +734,8 @@ function showResizeConfirm(){
 async function showConfirm(doc, w_new, h_new, th) {
   /* we'll display a dialog here */
   const feedback = await confirm(
-          "Resize your work?", //[1]
-          `The shorter side of your drawing is greater than ${th}px. This will delay the flatting process to a few minitues per each image. would you like to reszie your work to ${parseInt(w_new)}px x ${parseInt(h_new)}px ?`, //[2]
+          `Resize ${doc.title} ?` , //[1]
+          `Would you like to reszie your work to ${parseInt(w_new)}px x ${parseInt(h_new)}px? Other wise the process time of any image that greater than ${th}px might increase to a few minitues. `, //[2]
           ["No", "Yes"] /*[3]*/
         );
   switch (feedback.which) {
@@ -723,14 +744,6 @@ async function showConfirm(doc, w_new, h_new, th) {
     return false;
   case 1:
     /* User clicked Enable */
-    // resize locally is difficult, let's do it at the backend
-    const resizeFolderToken = await localStorage.getItem("resizeFolder");
-    const resizeFolder = await fs.getEntryForPersistentToken(resizeFolderToken);
-    const FileNameBP = doc.title.lastIndexOf(".");
-    const saveFileName = doc.title.substr(0, FileNameBP) + "_resized.psd";
-    const file = await resizeFolder.createFile(saveFileName, {overwrite: true});
-    doc.save(file);
-    doc.resizeImage(w_new, h_new);
     return true;
 }
 
@@ -789,7 +802,7 @@ export async function readFiles() {
                 h_new = r*th;
             }
             // pop out a dialog to ask user to decide
-            resize = await showConfirm(doc, w_new, h_new, th);
+            resize = await showConfirm(doc, w_new, h_new, th); 
         }
         // 
         await sleep(300);
@@ -797,7 +810,7 @@ export async function readFiles() {
         if (app.activeDocument.activeLayers[0].locked === true){
             app.activeDocument.activeLayers[0].locked = false; //this is the best way to lock or unlock layer
             app.activeDocument.activeLayers[0].name = file.name; // and rename layer
-            app.activeDocument.activeLayers[0].visible = false;
+            // app.activeDocument.activeLayers[0].visible = false;
             app.activeDocument.activeLayers[0].locked = true;
         }
         const documentID = doc._id;
@@ -1014,16 +1027,18 @@ async function saveVisibleLayer(fileName) {
 }
 
 // Save the merge hint layer and clear current input in it
-export async function saveMergeHintLayer() {
-    // await hideAllLayers();
-    // await showMergeHintLayer();
-    // await saveVisibleLayer('merge-hint.png')
-    // await showAllLayers();
-
-    if (await saveLayerByName('merge-hint', 'merge-hint.png')){
+export async function saveMergeHintLayer(layerGroup=app.activeDocument.layers) {
+    if (await saveLayerByName('merge-hint', 'merge-hint.png', layerGroup)){
         // clear the content in this layer
-        let layer = await cleanLayerbyName('merge-hint');
-        return layer;    
+        // but if it is in a group, then we don't need to cleanup
+        if (layerGroup.isGroupLayer === undefined){
+            let layer = await cleanLayerbyName('merge-hint');
+            return layer;
+        }
+        else{
+            let layer = await getLayerByName('merge-hint', layerGroup);
+            return layer;
+        }
     }
     else{
         return false;
@@ -1031,30 +1046,24 @@ export async function saveMergeHintLayer() {
     
 }
 
-export async function saveLineArtistLayer() {
-    await saveLayerByName('line_artist', 'line-artist.png');
+export async function saveLineArtistLayer(layerGroup=app.activeDocument.layers) {
+    await saveLayerByName('line_artist', 'line-artist.png', layerGroup);
 }
 
-export async function saveFillNeuralLayer() {
-    await saveLayerByName('result_neural', 'fill-neural.png');
+export async function saveFillNeuralLayer(layerGroup=app.activeDocument.layers) {
+    await saveLayerByName('result_neural', 'fill-neural.png', layerGroup);
 }
 
-
-// export async function saveResultLayer() {
-//     await saveLayerByName('result', 'result.png');
-// }
-
-// Save the split hint layer using "saveVisibleLayer"
-export async function saveFineSplitHintLayer() {
-    // await hideAllLayers();
-    // await showSplitHintLayer();
-    // await saveVisibleLayer('split-hint-fine.png')
-    // await showAllLayers();
-
-    if (await saveLayerByName('split-hint', 'split-hint-fine.png')){
-        // clear the content in this layer
-        let layer = await cleanLayerbyName('split-hint');
-        return layer;
+export async function saveFineSplitHintLayer(layerGroup=app.activeDocument.layers) {
+    if (await saveLayerByName('split-hint', 'split-hint-fine.png', layerGroup)){
+        if (layerGroup.isGroupLayer){
+            let layer = await getLayerByName('split-hint', layerGroup);
+            return layer;       
+        }
+        else{
+            let layer = await cleanLayerbyName('split-hint');
+            return layer;
+        }
     }
     else
         return false;
@@ -1076,11 +1085,11 @@ export async function saveCoarseSplitHintLayer() {
 }
 
 // save the layer's content of current active document to png
-async function saveLayerByName(layerName, fileName){
-    if (await hideAllLayersExcept(layerName)){
+async function saveLayerByName(layerName, fileName, layerGroup=app.activeDocument.layers){
+    if (await hideAllLayersExcept(layerName, layerGroup)){
         let entry = await createNewFile(fileName);
         await app.activeDocument.save(entry);
-        await showAllLayers();
+        await showAllLayers(layerGroup);
         return true;
     }
     else
@@ -1091,21 +1100,23 @@ async function saveLayerByName(layerName, fileName){
     
 }
 
-async function hideAllLayersExcept(layerName){
-    let currLayer = await getLayerByName(layerName);
+async function hideAllLayersExcept(layerName, layerGroup=app.activeDocument.layers){
+    let currLayer = await getLayerByName(layerName, layerGroup);
     if (currLayer === false){
-        return false
+        return false;
     }
     else{
         await hideAllLayers();
         currLayer.visible = true;
-        return true    
+        if (layerGroup.isGroupLayer)
+            layerGroup.visible = true;
+        return true;    
     }
     
 }
 
-async function cleanLayerbyName(layerName, moveToTop = true, doc=app.activeDocument){
-    let layer = getLayerByName(layerName, doc);
+async function cleanLayerbyName(layerName, moveToTop = true, doc=app.activeDocument, layerGroup=app.activeDocument.layers){
+    let layer = getLayerByName(layerName, layerGroup);
     if (layer.locked){
         layer.selected = true; // we need to select the layer before doing any operation on it
         layer.locked = false;
@@ -1114,7 +1125,7 @@ async function cleanLayerbyName(layerName, moveToTop = true, doc=app.activeDocum
     layer = await createLayer(layerName, doc);
     // move the layer to the top, so user's input will before everything
     if (moveToTop){
-        await moveLayerToTop(layer, true, doc);    
+        await moveLayerToTop(layer, true);    
     }
     return layer;
 }
@@ -1129,7 +1140,7 @@ async function cleanLayer(layer, moveToTop = true, doc=app.activeDocument){
     layer = await createLayer(name, doc);
     // move the layer to the top, so user's input will before everything
     if (moveToTop){
-        await moveLayerToTop(layer, true, doc);
+        await moveLayerToTop(layer, true);
     }
     return layer;
 }
@@ -1177,7 +1188,7 @@ export async function moveAboveTo(layerTarget, backingLayer, forEdit=false){
     
 }
 
-async function moveBelowTo(layerTarget, frontLayer, forEdit=false){
+export async function moveBelowTo(layerTarget, frontLayer, forEdit=false){
     frontLayer.selected = true;
     layerTarget.selected = true;
     frontLayer.locked = false;
@@ -1199,7 +1210,8 @@ async function moveBelowTo(layerTarget, frontLayer, forEdit=false){
 ////////////////////////////////////////////////////
 // working area
 export async function createLinkLayer(layerName, img, 
-    refresh=false, locked=true, select=false, doc=app.activeDocument, fix=true){
+                                refresh=false, locked=true, select=false, 
+                                doc=app.activeDocument, fix=true){
     // get the action name
     // we have to do this because it is almost impossible to add image into a layer directly
     let actionName = await localStorage.getItem("actionName");
@@ -1214,11 +1226,12 @@ export async function createLinkLayer(layerName, img,
     }
     // find if the layer has exists already
     var newLayer = await getLayerByName(layerName);
+    var groupLayers = doc.layerTree.filter((layer)=>layer.isGroupLayer)
     // create new layer with given name if not exsits
-    if (newLayer === false){
+    if (newLayer === false || groupLayers.length > 0){
         newLayer = await doc.createLayer({name: layerName});
         // since this is new layer, move it to the top
-        await moveLayerToTop(newLayer, true)
+        await moveLayerToTop(newLayer, true);
     }
     else{
         newLayer = await cleanLayer(newLayer, refresh);
@@ -1240,6 +1253,7 @@ export async function createLinkLayer(layerName, img,
     newLayer = getLayerByName(imgTemp.replace(".png", ""));
     newLayer.selected = true;
     newLayer.name = layerName;
+    var bottomLayer;
     if (layerName === "result_neural"){
         if (fix){
             // find the first group layer

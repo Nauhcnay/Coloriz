@@ -44,7 +44,10 @@ import {
     getLayerByName,
     moveLineHintLayerBack,
     moveLayerToTop,
-    moveAboveTo
+    moveAboveTo,
+    moveBelowTo,
+    activatePencil,
+    setBrushSize
 } from '../functions';
 
 import { Modal } from 'antd'; // why import this line? it is not used anywhere
@@ -144,23 +147,11 @@ const useStyles = makeStyles((theme) => ({
     root: {
       minWidth: 300,
       height: '100vh',
-      // width: '100%',
-      // maxWidth: 360,
+      overflowY: "hidden"
     },
-
-    // scenes: {
-    //     overflowY: 'scroll',
-    // },
-
-    radioGroup: {
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    scenes: {
+        overflowY: 'scroll',
     },
-    input: {
-        width: 100,
-        height: 100,
-      },
 }));
 
 // Panle componments
@@ -240,7 +231,8 @@ const BluewRadio = withStyles({
 const TabDIV = {
       display: "block",
       height:"350px",
-      width:"250px"};
+      width:"250px",
+      overflowY: "hidden"};
 
 const ButtonStyleSmall = {
             color:"#9AE42C", 
@@ -338,7 +330,7 @@ var mergeSize = 10;
 // this option enables fast redo and undo in trade of much more layer spaces required in photoshop
 // it will store 6*n layers for each document (n is number of the colorize and tweak times)
 // disable this option will only maintain 6 layers for each document
-var fastHistory = false; 
+var fastHistory = true; 
 const getScenes = ()=>scenesGlobal;
 function Panel() {
     const getFlatting = ()=> StartFlatting; // we have to the pass the function instead of variable
@@ -351,9 +343,15 @@ function Panel() {
     const handleTabChange = (event, newValue) => {
         setTab(newValue);
         if (newValue===1)
-            handleFineSplitToolClick(3);
+            if (fastHistory)
+                handleFineSplitToolClickFast(3);
+            else
+                handleFineSplitToolClick(3);
         if (newValue===0)
-            handleMergeToolClick(mergeSize);
+            if (fastHistory)
+                handleMergeToolClickFast(mergeSize);
+            else
+                handleMergeToolClick(mergeSize);
       };
 
     const [isMerging, setIsMerging] = useState(false);
@@ -391,16 +389,6 @@ function Panel() {
             flattingSubmission = 0;
     }, [scenes]);
 
-    const BrushRadioGroup = (
-        <FormControl component="fieldset">
-            <FormLabel component="legend">Brush Mode</FormLabel>
-            <RadioGroup className={classes.radioGroup} aria-label="brush" name="brush" value={brushMode} onChange={handleBrushModeChange}>
-                <FormControlLabel value="merge" control={<RedRadio />} label={<p style={{color: red[800]}}>Merge</p>} />
-                <FormControlLabel value="splitfine" control={<YellowRadio />} label={<p style={{color: yellow[400]}}>Fine Split</p>} />
-                <FormControlLabel value="splitcoarse" control={<BluewRadio />} label={<p style={{color: blue[400]}}>Coarse Split</p>} />
-            </RadioGroup>
-        </FormControl>
-    )
 
     const ColorizeButton = <TwoStateButton onClick={tryMerge} text="Colorize" isLoading={isMerging} isFlatting={isFlatting}/>
     const TuningButton = <TwoStateButton onClick={trySplitFine} text="Tuning" isLoading={isSplitting} isFlatting={isFlatting}/>
@@ -474,64 +462,169 @@ function Panel() {
     };
 
     const handleInputChange = () => {
-        setBrushSize(document.querySelector("#mergeSlider").value);
-        handleMergeToolClick(document.querySelector("#mergeSlider").value);
         mergeSize = document.querySelector("#mergeSlider").value;
+        if (fastHistory){
+            handleMergeToolClickFast(mergeSize);
+        }
+        else{
+            handleMergeToolClick(mergeSize);
+        }
     };
 
 
     async function reorderFlat(){
-        setIsFlatting(true);
+        var layerGroup;
+        const doc = app.activeDocument;
+        var layers;
+        if (fastHistory){
+            layerGroup = getWorkingLayerGroup();
+            layers = layerGroup.children;
+        }
+        else{
+            layerGroup = doc.layers;
+            layers = doc.layers;
+        }
         // reorder the result layer
+        
         try{
             var bottomLayer;
-            let layerNeural = await getLayerByName("result_neural");
-            if (layerNeural===false){
-                app.showAlert("can't find the flatting layer, start to reset current document");
-                await displayScene(0);
+            
+            let layerNeural = await getLayerByName("result_neural", layerGroup);
+            bottomLayer = layers[layers.length - 1];
+            if (fastHistory){
+                if (layers.indexOf(bottomLayer) - layers.indexOf(layerNeural) !== 0)
+                    // here we need to move to bottom
+                    await moveBelowTo(layerNeural, bottomLayer);
             }
             else{
-                bottomLayer = app.activeDocument.layers[app.activeDocument.layers.length - 1];
-                await moveAboveTo(layerNeural, bottomLayer);
+                if (layers.indexOf(bottomLayer) - layers.indexOf(layerNeural) !== 1)
+                    await moveAboveTo(layerNeural, bottomLayer);
             }
 
-            let layerArtist = await getLayerByName("line_artist");
+            let layerArtist = await getLayerByName("line_artist", layerGroup);
             bottomLayer = layerNeural;
-            await moveAboveTo(layerArtist, bottomLayer);
+            if (layers.indexOf(bottomLayer) - layers.indexOf(layerArtist) !== 1)
+                await moveAboveTo(layerArtist, bottomLayer);
 
-            let layerLineHint = await getLayerByName("line_hint");
+            let layerLineHint = await getLayerByName("line_hint", layerGroup);
             bottomLayer = layerArtist;
-            await moveAboveTo(layerLineHint, bottomLayer);
+            if (layers.indexOf(bottomLayer) - layers.indexOf(layerLineHint) !== 1)
+                await moveAboveTo(layerLineHint, bottomLayer);
 
-            let layerSimplified = await getLayerByName("line_simplified");
-            bottomLayer = layerArtist;
-            await moveAboveTo(layerSimplified, bottomLayer);
+            let layerSimplified = await getLayerByName("line_simplified", layerGroup);
+            bottomLayer = layerLineHint;
+            if (layers.indexOf(bottomLayer) - layers.indexOf(layerSimplified) !== 1)
+                await moveAboveTo(layerSimplified, bottomLayer);
 
-            let layerMergeHint = await getLayerByName("merge-hint");
+            let unlockWhich;
+            let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
             if (layerMergeHint !== false){
-                if (layerMergeHint.locked === true){
-                    bottomLayer = layerSimplified;
-                    await moveAboveTo(layerMergeHint, bottomLayer);        
+                bottomLayer = layers[0];
+                if (layers.indexOf(bottomLayer) - layers.indexOf(layerMergeHint) !== 1){
+                    await moveAboveTo(layerMergeHint, bottomLayer, true);
                 }
-                else
-                    await moveLayerToTop(layerMergeHint, true)
             }
 
-            let layerSplitHint = await getLayerByName("split-hint");
+            let layerSplitHint = await getLayerByName("split-hint", layerGroup);
             if (layerSplitHint !== false){
-                if (layerSplitHint.locked === true){
-                    bottomLayer = layerSimplified;
-                    await moveAboveTo(layerSplitHint, bottomLayer);        
+                bottomLayer = layers[0];
+                if (layers.indexOf(bottomLayer) - layers.indexOf(layerSplitHint) !== 1){
+                    await moveAboveTo(layerSplitHint, bottomLayer, true);
                 }
-                else
-                    await moveLayerToTop(layerSplitHint, true)
-            }    
+                        
+                
+            }
+            if (tab === 0)
+                unlockWhich = layerMergeHint;
+            else
+                unlockWhich = layerSplitHint;
+            if (fastHistory){
+                // let's just unlock all group layers here
+                doc.layerTree.forEach((layer)=>{
+                                    if (layer.isGroupLayer){
+                                        layer.locked = false;
+                                        if (layer.locked){
+                                            // only batch play could unlock the group layer
+                                            forceUnlock(layer);
+                                        }
+                                    }
+                                });
+
+                // dirty fix
+                doc.layerTree.forEach((l)=>{
+                    if (l._id === layerGroup._id){
+                        if (l.visible===false)
+                            l.visible = true;
+                    }
+                    else{
+                        if (l.visible===true)
+                            l.visible = false;
+                    }
+                });
+
+                // select merge or split layer
+                doc.layers.forEach((layer)=>{
+                    if (layer.selected === true)
+                        layer.selected = false
+                });
+
+                layers.forEach((l)=>{
+                    if (l.visible===false)
+                        l.visible=true;
+                })
+                
+                unlockWhich.selected = true;
+                unlockWhich.locked = false;
+                
+            }
+                    
         }
         catch(e){
             console.log(e)
         }
-            
-        setIsFlatting(false);
+    }
+
+    async function forceUnlock(layer){
+        // so this function has a side issue
+        // it will force show all layers eventhough I didn't ask to do it
+        // but this is the only possible way to unlock layers
+        // layer.locked = false will not work sometimes
+        // so we need additional works for this
+        const batchPlay = require("photoshop").action.batchPlay;
+        const doc = app.activeDocument;
+        
+        // select the layer 
+        doc.layers.forEach(l=>{
+            if (l.selected === true)
+                l.selected = false;
+        });
+        layer.selected = true;
+
+        // force unlock the selected layer
+        result = await batchPlay(
+        [
+           {
+              "_obj": "applyLocking",
+              "_target": [
+                 {
+                    "_ref": "layer",
+                    "_enum": "ordinal",
+                    "_value": "targetEnum"
+                 }
+              ],
+              "layerLocking": {
+                 "_obj": "layerLocking",
+                 "protectNone": true
+              },
+              "_isCommand": true,
+              "_options": {
+                 "dialogOptions": "dontDisplay"
+              }
+           }
+        ],{
+           "synchronousExecution": false,
+           "modalBehavior": "fail"
+        });
     }
 
     async function readPalette(){
@@ -658,21 +751,57 @@ function Panel() {
 
     async function showViewMode(){
         let i;
-        let end = app.activeDocument.layers.length;
-        for (i=0; i < end; i++){    
-            if (app.activeDocument.layers[i].name === "result_neural" || i == end - 1){
-                app.activeDocument.layers[i].visible = true;
-            }
-            else
-                app.activeDocument.layers[i].visible = false;
+        let end;
+        let layers;
+        if (fastHistory){
+            let layerGroup = getWorkingLayerGroup();    
+            layers = layerGroup.children;
+            end = layerGroup.children.length;
         }
+        else{
+            layers = app.activeDocument.layers;
+            end = layers.length;
+        }
+
+        for (i=0; i < end; i++){
+            if (fastHistory){
+                if (layers[i].name === "result_neural"){
+                    layers[i].visible = true;
+                }
+                else
+                    layers[i].visible = false;
+            }
+            else{
+                if (layers[i].name === "result_neural" || i == end - 1){
+                    layers[i].visible = true;
+                }
+                else
+                    layers[i].visible = false;
+            }
+        }
+        var doc = app.activeDocument;
+        if (doc.layers[doc.layers.length-1].visible === false){
+            doc.layers[doc.layers.length-1].visible = true;    
+        }
+        
     };
 
     async function showEditMode(){
         let i;
-        let end = app.activeDocument.layers.length;
+        let end;
+        let layers;
+        if (fastHistory){
+            let layerGroup = getWorkingLayerGroup();    
+            layers = layerGroup.children;
+            end = layerGroup.children.length;
+        }
+        else{
+            layers = app.activeDocument.layers;
+            end = layers.length;
+        }
+            
         for (i=0; i < end; i++){
-            app.activeDocument.layers[i].visible = true;       
+            layers[i].visible = true;       
         }
     }
 
@@ -720,6 +849,8 @@ function Panel() {
     }
 
     async function tryFlat() {
+        // get all docs
+        const docs = photoshop.app.documents;
         // we need to make a deep copy
         let updatedScenes = JSON.parse(JSON.stringify(scenes))
         setIsFlatting(true);
@@ -736,7 +867,37 @@ function Panel() {
             try{
                 if (updatedScenes[i].flatted === false){
                     haveNewSceneFlatted = true;
-                    const updatedScene = await flatSingleBackground(updatedScenes[i]);
+                    // resize the doc if necessary
+                    let doc = docs.filter(d=>d._id === updatedScenes[i].documentID)[0];
+                    if (updatedScenes[i].resize){
+                        // compute the new size of the doc
+                        let h_new;
+                        let w_new;
+                        let r;
+                        let th=2000
+                        let w = doc.width;
+                        let h = doc.height;
+                        if (w > h){
+                            r = w/h;
+                            h_new = th;
+                            w_new = r*th;
+                        }
+                        else{
+                            r = h/w;
+                            w_new = th;
+                            h_new = r*th;
+                        }
+                        // save to new file and resize
+                        const resizeFolderToken = await localStorage.getItem("resizeFolder");
+                        const resizeFolder = await fs.getEntryForPersistentToken(resizeFolderToken);
+                        const FileNameBP = doc.title.lastIndexOf(".");
+                        const saveFileName = doc.title.substr(0, FileNameBP) + "_resized.psd";
+                        const file = await resizeFolder.createFile(saveFileName, {overwrite: true});
+                        doc.save(file);
+                        doc.resizeImage(w_new, h_new);
+                        console.log("resize file successed");
+                    } 
+                    const updatedScene = await flatSingleBackground(updatedScenes[i]);    
                     // here we need to merge to scene list, cause the scene could be updated
                     // by other place during the flatting
                     scenesGlobal = scenesGlobal.map((s)=>{
@@ -747,11 +908,11 @@ function Panel() {
                     })
                     if (i >= end - 1)
                         isFlattingGlobal = false;
+
                     setScenes(scenesGlobal);
                     if (app.activeDocument._id === updatedScenes[i].documentID){
                         setIsFlatting(false);
                     }
-                    
                 }
                 continue;
             }
@@ -838,31 +999,43 @@ function Panel() {
         const { line_artist, line_simplified, image, line_hint, fill_artist } = result;
         console.log('Flatting done!')
 
-        if (fastHistory){
-            // in fast history mode, we don't need to waste memory to save a large scene
-            targetScene["flatted"] = true;
-            targetScene["line_artist"] = line_artist;
-            targetScene["line_simplified"] = line_simplified;
-            targetScene["image"] = image;
-            targetScene["fill_artist"] = fill_artist;
-            targetScene["line_hint"] = line_hint;
-            // these two layers also need to be added into the undo list
-            targetScene["merge_hint"] = null;
-            targetScene["split_hint"] = null;
-            targetScene["historyIndex"]++;
-        }
-        else{
-            targetScene["flatted"] = true;
-            targetScene["line_artist"] = [null, line_artist];
-            targetScene["line_simplified"] = [null, line_simplified];
-            targetScene["image"].push(image);
-            targetScene["fill_artist"] = [null, fill_artist];
-            targetScene["line_hint"] = [null, line_hint];
-            // these two layers also need to be added into the undo list
-            targetScene["merge_hint"] = [null, null];
-            targetScene["split_hint"] = [null, null];
-            targetScene["historyIndex"]++;      
-        }
+        // if (fastHistory){
+        //     // in fast history mode, we don't need to waste memory to save a large scene
+        //     // no we also need this feature, 
+        //     targetScene["flatted"] = true;
+        //     targetScene["line_artist"] = line_artist;
+        //     targetScene["line_simplified"] = line_simplified;
+        //     targetScene["image"] = image;
+        //     targetScene["fill_artist"] = fill_artist;
+        //     targetScene["line_hint"] = line_hint;
+        //     // these two layers also need to be added into the undo list
+        //     targetScene["merge_hint"] = null;
+        //     targetScene["split_hint"] = null;
+        //     targetScene["historyIndex"]++;
+        // }
+        // else{
+        //     targetScene["flatted"] = true;
+        //     targetScene["line_artist"] = [null, line_artist];
+        //     targetScene["line_simplified"] = [null, line_simplified];
+        //     targetScene["image"].push(image);
+        //     targetScene["fill_artist"] = [null, fill_artist];
+        //     targetScene["line_hint"] = [null, line_hint];
+        //     // these two layers also need to be added into the undo list
+        //     targetScene["merge_hint"] = [null, null];
+        //     targetScene["split_hint"] = [null, null];
+        //     targetScene["historyIndex"]++;      
+        // }
+
+        targetScene["flatted"] = true;
+        targetScene["line_artist"] = [null, line_artist];
+        targetScene["line_simplified"] = [null, line_simplified];
+        targetScene["image"].push(image);
+        targetScene["fill_artist"] = [null, fill_artist];
+        targetScene["line_hint"] = [null, line_hint];
+        // these two layers also need to be added into the undo list
+        targetScene["merge_hint"] = [null, null];
+        targetScene["split_hint"] = [null, null];
+        targetScene["historyIndex"]++;      
         
         return targetScene;
     }
@@ -872,8 +1045,17 @@ function Panel() {
         // display the selected content to photoshop
         console.log('loading flatting results...')
         setRGBMode();
+        const doc = app.activeDocument;
+        // reset all background layers
+        if (doc.layers[doc.layers.length-1].name !== "original"){
+            doc.layers[doc.layers.length-1].locked = false;
+            doc.layers[doc.layers.length-1].name = "original";
+            doc.layers[doc.layers.length-1].locked = true;
+        }
+            
+        
         // read data from selected input
-        const scene = scenesGlobal.filter(scene => scene.documentID === app.activeDocument._id)[0]
+        var scene = scenesGlobal.filter(scene => scene.documentID === app.activeDocument._id)[0]
         try{
             if ((scene.historyIndex + offset) < 1){
                 app.showAlert("This is the end of undo list");
@@ -883,181 +1065,337 @@ function Panel() {
                 app.showAlert("This is the end of redo list");
                 return null;
             }
-            // the offset means the moving the 
+
+            // load flatting results
+            var line_artist;
+            var line_simplified;
+            var image;
+            var line_hint;
+            var merge_hint;
+            var split_hint;
+            let layerGroup;
+            // if (fastHistory){
+            //     scene.historyIndex = scene.historyIndex + offset;
+            //     line_artist = scene.line_artist;
+            //     line_simplified = scene.line_simplified;
+            //     image = scene.image;
+            //     line_hint = scene.line_hint;
+            //     merge_hint = scene.merge_hint;
+            //     split_hint = scene.split_hint;
+            // }
+            // else{
+            //     // the offset means the moving the 
+            //     scene.historyIndex = scene.historyIndex + offset;
+            //     line_artist = scene.line_artist[scene.historyIndex];
+            //     line_simplified = scene.line_simplified[scene.historyIndex];
+            //     image = scene.image[scene.historyIndex];
+            //     line_hint = scene.line_hint[scene.historyIndex];
+            //     merge_hint = scene.merge_hint[scene.historyIndex];
+            //     split_hint = scene.split_hint[scene.historyIndex];
+            // }
             scene.historyIndex = scene.historyIndex + offset;
-            const line_artist = scene.line_artist[scene.historyIndex];
-            const line_simplified = scene.line_simplified[scene.historyIndex];
-            const image = scene.image[scene.historyIndex];
-            const line_hint = scene.line_hint[scene.historyIndex];
-            const merge_hint = scene.merge_hint[scene.historyIndex];
-            const split_hint = scene.split_hint[scene.historyIndex];
+            scene.clicked = true;
+            line_artist = scene.line_artist[scene.historyIndex];
+            line_simplified = scene.line_simplified[scene.historyIndex];
+            image = scene.image[scene.historyIndex];
+            line_hint = scene.line_hint[scene.historyIndex];
+            merge_hint = scene.merge_hint[scene.historyIndex];
+            split_hint = scene.split_hint[scene.historyIndex];
+
+            // create layers if they are not exist
             const batchPlay = photoshop.action.batchPlay;
+            if (offset === 0){
+                let len = 0;
+                doc.layerTree.forEach((layer)=>{
+                    if (layer.isGroupLayer)
+                        len++;
+                })
+                if ((len+1) !== scene.historyIndex){
+                    console.log("history index record is not correct!")
+                    app.showAlert("Internal error, please restart the plugin")
+                    return null;
+                }
+            }
+                
 
-            // const { line_artist, line_simplified, image, line_hint } = scene;
-        
-                 
-            console.log('Loading result');
-            if (image !== null){
-                if (await createLinkLayer("result_neural", image, true, true, false, app.activeDocument, fix) === null){
-                   return null;
-                }    
-            }
-            else
-                console.log('Loading result failed');
-            
-            console.log('Loading line art');
-            if (line_artist !== null){
-                if (await createLinkLayer("line_artist", line_artist, true) === null){
-                return null;
-                }    
-            }
-            else
-                console.log('Loading line art failed');
-            
-            console.log('Loading line hint');
-            if (line_hint !== null){
-                if (await createLinkLayer("line_hint", line_hint, true) === null){
-                return null;
-                }    
-            }
-            else
-                console.log('Loading line hint failed');
-            
-            console.log('Loading line simple');
-            if (line_simplified !== null){
-                if (await createLinkLayer("line_simplified", line_simplified, true) === null){
-                return null;
-                }    
-            }
-            else
-                console.log('Loading line simple failed');
-
-            console.log('Loading merge hint');
-            if (merge_hint !== null){
-                let mergeLayer = await createLinkLayer("merge-hint", merge_hint, true, false, true);
-                if ( mergeLayer === null){
-                return null;
+            var layerGroupList = doc.layerTree.filter((layer)=>layer.name === `Flat ${scene.historyIndex}`)
+            if (fastHistory === false || (fastHistory && offset === 0 && layerGroupList.length === 0)){
+                
+                console.log('Loading result');
+                if (image !== null){
+                    var layerNeural = await createLinkLayer("result_neural", image, true, true, false, app.activeDocument, fix);
+                    if (layerNeural === null){
+                       return null;
+                    }    
                 }
                 else{
-                    mergeLayer.locked = false;
-                    mergeLayer.selected = true;
-                    // we need to rasterize the selected layer
-                    const result = await batchPlay(
-                    [
-                       {
-                          "_obj": "rasterizeLayer",
-                          "_target": [
-                             {
-                                "_ref": "layer",
-                                "_enum": "ordinal",
-                                "_value": "targetEnum"
-                             }
-                          ],
-                          "_isCommand": true,
-                          "_options": {
-                             "dialogOptions": "dontDisplay"
-                          }
-                       }
-                    ],{
-                       "synchronousExecution": false,
-                       "modalBehavior": "fail"
-                    });
+                    console.log('Loading result failed');
+                    return null;
+                }
+                
+                console.log('Loading line art');
+                var layerArtist;
+                if (line_artist !== null){
+                    layerArtist = await createLinkLayer("line_artist", line_artist, true);
+                    if (layerArtist === null){
+                        return null;
+                    }    
+                }
+                else{
+                    // copy the layer in the last group
+                    if (fastHistory){
+                        let layerArtistPre = getLayerByName("line_artist");
+                        if (layerArtistPre)
+                            layerArtist = await layerArtistPre.duplicate(doc, "line_artist");
+                        else{
+                            console.log('Loading line art failed');
+                            return null;
+                        }
+                    }
+                    else
+                        console.log('Loading line art failed');
+                }
+                
+                console.log('Loading line hint');
+                var layerLineHint;
+                if (line_hint !== null){
+                    layerLineHint = await createLinkLayer("line_hint", line_hint, true);
+                    if ( layerLineHint=== null){
+                    return null;
+                    }    
+                }
+                else{
+                    // copy the layer in the last group
+                    if (fastHistory){
+                        let layerLineHintPre = getLayerByName("line_hint");
+                        if (layerLineHintPre)
+                            layerLineHint = await layerLineHintPre.duplicate(doc, "line_hint");
+                        else{
+                            console.log('Loading line hint failed');
+                            return null;
+                        }
+                    }
+                    else
+                        console.log('Loading line hint failed');
+                        
+                }
+                       
+                
+                console.log('Loading line simple');
+                var layerSimplified;
+                if (line_simplified !== null){
+                    layerSimplified = await createLinkLayer("line_simplified", line_simplified, true);
+                    if ( layerSimplified === null){
+                    return null;
+                    }    
+                }
+                else{
+                    if (fastHistory){
+                        let layerSimplifiedPre = getLayerByName("line_simplified");
+                        if (layerSimplifiedPre)
+                            layerSimplified = layerSimplifiedPre.duplicate(doc, "line_simplified");
+                        else{
+                            console.log('Loading line simple failed');
+                            return null;
+                        }
+                    }
+                    else
+                        console.log('Loading line simple failed');
+                        
+                }
 
+                console.log('Loading merge hint');
+                var layerMergeHint;
+                if (merge_hint !== null){
+                    layerMergeHint = await createLinkLayer("merge-hint", merge_hint, true, false, true);
+                    if ( layerMergeHint === null){
+                    return null;
+                    }
+                    else{
+                        layerMergeHint.locked = false;
+                        layerMergeHint.selected = true;
+                        // we need to rasterize the selected layer
+                        const result = await batchPlay(
+                        [
+                           {
+                              "_obj": "rasterizeLayer",
+                              "_target": [
+                                 {
+                                    "_ref": "layer",
+                                    "_enum": "ordinal",
+                                    "_value": "targetEnum"
+                                 }
+                              ],
+                              "_isCommand": true,
+                              "_options": {
+                                 "dialogOptions": "dontDisplay"
+                              }
+                           }
+                        ],{
+                           "synchronousExecution": false,
+                           "modalBehavior": "fail"
+                        });
+
+                    }
+                }
+                else{
+                    if (fastHistory){
+                        layerGroup = getWorkingLayerGroup();
+                        let layerMergeHintPre;
+                        if (layerGroup)
+                            layerMergeHintPre = getLayerByName("merge-hint", layerGroup);
+                        else
+                            layerMergeHintPre = getLayerByName("merge-hint");
+                        if (layerMergeHintPre && tab !== 0)
+                            layerMergeHint = await layerMergeHintPre.duplicate(doc, "merge-hint");
+                        else
+                            // the merge layer will not have failure case, we will create an empty one eventually
+                            layerMergeHint = await doc.createLayer({name:"merge-hint"});
+                    }
+                    else
+                        console.log('Loading merge hint layer failed');
+                        
+                }
+
+                console.log('Loading split hint');
+                var layerSplitHint;
+                if (split_hint !== null){
+                    layerSplitHint = await createLinkLayer("split-hint", split_hint, true, false, true);
+                    if ( layerSplitHint === null){
+                    return null;
+                    }
+                    else{            
+                        layerSplitHint.locked = false;
+                        layerSplitHint.selected = true;
+                        const result = await batchPlay(
+                        [
+                           {
+                              "_obj": "rasterizeLayer",
+                              "_target": [
+                                 {
+                                    "_ref": "layer",
+                                    "_enum": "ordinal",
+                                    "_value": "targetEnum"
+                                 }
+                              ],
+                              "_isCommand": true,
+                              "_options": {
+                                 "dialogOptions": "dontDisplay"
+                              }
+                           }
+                        ],{
+                           "synchronousExecution": false,
+                           "modalBehavior": "fail"
+                        });
+
+                    }
+                }
+                else{
+                    if (fastHistory){
+                        layerGroup = getWorkingLayerGroup();
+                        let layerSplitHintPre;
+                        if (layerGroup)
+                            layerSplitHintPre = getLayerByName("split-hint", layerGroup);
+                        else
+                            layerSplitHintPre = getLayerByName("split-hint");
+                        
+                        if (layerSplitHintPre && tab !== 1)
+                            layerSplitHint = await layerSplitHintPre.duplicate(doc, "split-hint");
+                        else
+                            layerSplitHint = await doc.createLayer({name:"split-hint"});
+                        layerSplitHint.locked = true;
+                    }
+                    else
+                        console.log('Loading split hint layer failed');
                 }
             }
-            else
-                console.log('Loading merge hint failed');
-
-            console.log('Loading split hint');
-            if (split_hint !== null){
-                let splitLayer = await createLinkLayer("split-hint", split_hint, true, false, true);
-                if ( splitLayer === null){
-                return null;
-                }
-                else{            
-                    splitLayer.locked = false;
-                    splitLayer.selected = true;
-                    const result = await batchPlay(
-                    [
-                       {
-                          "_obj": "rasterizeLayer",
-                          "_target": [
-                             {
-                                "_ref": "layer",
-                                "_enum": "ordinal",
-                                "_value": "targetEnum"
-                             }
-                          ],
-                          "_isCommand": true,
-                          "_options": {
-                             "dialogOptions": "dontDisplay"
-                          }
-                       }
-                    ],{
-                       "synchronousExecution": false,
-                       "modalBehavior": "fail"
-                    });
-
-                }
-            }
-            else
-                console.log('Loading split hint failed');
             
+                
+            
+            // move all layers into new layer group
+            if (fastHistory){
+                // create group layer if not exists
+                if (layerGroupList.length===0){
+                    layerGroup = await doc.createLayerGroup(
+                        {name:`Flat ${scene.historyIndex}`, 
+                        fromLayers: [layerNeural, layerArtist, layerLineHint,
+                                    layerSimplified, layerSplitHint, layerMergeHint]});
+                }
+                else
+                    layerGroup = layerGroupList[0];
+                // hide all other layergourps and show the last one only
+                for (let i=0;i<doc.layerTree.length;i++){
+                    if (doc.layerTree[i].name === `Flat ${scene.historyIndex}`){
+                        doc.layerTree[i].visible = true;
+                    }
+                    else
+                        doc.layerTree[i].visible = false;
+                }
+                // reorder the layergroup
+                if (offset===0)
+                    await reorderFlat();
+            }
+
             // update the scenes click state
-            scenesGlobal = scenesGlobal.map(scene=>{
-                if (scene.clicked === false && scene.documentID === app.activeDocument._id){
-                    scene.clicked = true;
+            // but, of course, this is not need to repeated everytime
+            scenesGlobal = scenesGlobal.map((s)=>{
+                if (s.documentID === app.activeDocument._id){
                     return scene;
                 }
                 else
-                    return scene;
+                    return s;
             })
-            setScenes(scenesGlobal);
+            // setScenes(scenesGlobal);
+
         }
         catch (e){
-            app.showAlert("Flatting error, please reload this image to retry")
+            console.log(e)
+            app.showAlert(String(e));
         }    
     }
 
     // Todo: try to add different brush color support
     // But put this task later, this is not important now
+    function getWorkingLayerGroup(){
+        const doc = app.activeDocument;
+        const scene = scenesGlobal.filter(scene => scene.documentID === doc._id)[0];
+        const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
+        return layerGroup;
+    }
+
     async function merge() {
         console.log('Merging...')
-
+        const doc = app.activeDocument;
         // select the active document
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
         const { fileName } = scene;
         
         // read the user input
-        let mergeLayer = await saveMergeHintLayer();
+        var layerGroup = false;
+        var mergeLayer;
+        if (fastHistory){
+            layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
+            mergeLayer = await saveMergeHintLayer(layerGroup);
+        }
+        else
+            mergeLayer = await saveMergeHintLayer();
         if (mergeLayer === false){
             return false;
         }
         const stroke = await loadBase64('merge-hint.png');
+        var fill_neural;
+        var line_artist;        
+        var fill_artist;
 
-        // load the fill results
-        // await saveFillNeuralLayer();
-        // const fill_neural = await loadBase64('fill-neural.png');
-        
-        const fill_neural = scene.image[scene.historyIndex];
-
-
-        let line_artist;
+        fill_neural = scene.image[scene.historyIndex];
         if (scene.line_artist[scene.historyIndex] !== null && (scene.historyIndex) !== 1){
             // only the last element in the history list is not null means it is 
             // necessary to load the line art layer, otherwise
             // we could save some loading time
-
-            // await saveLineArtistLayer();
-            // const line_artist = await loadBase64('line-artist.png');    
-            
-            // or ... should we just load the last line artist in the history list?
             line_artist = scene.line_artist[scene.historyIndex]
         }
         else
-            line_artist = scene.line_artist[1];
-
-        let fill_artist;
+            line_artist = scene.line_artist[1];    
         if (scene.fill_artist[scene.historyIndex] !== null && (scene.historyIndex) !== 1){
 
             fill_artist = scene.fill_artist[scene.historyIndex];
@@ -1093,24 +1431,8 @@ function Panel() {
         // get result 
         const result = await response.json();
         const { line_simplified, image} = result;
-        console.log('Merging done!')
-
-        console.log('Loading result');
-        let newLayer1 = await createLinkLayer("result_neural", image);
-        if (newLayer1 === null){
-            return null;
-        }
-        await moveResultLayerBack(newLayer1);
-
-
-        console.log('Loading line simplified');
-        let newLayer2 = await createLinkLayer("line_simplified", line_simplified);
-        if (newLayer2 === null){
-            return null;
-        }
-        await moveSimplifiedLayerBack(newLayer2);
-        mergeLayer.selected = true;
-
+        
+        console.log("update current scene and scene list");
         // remove all history that after current index
         scene["line_artist"].splice(scene.historyIndex + 1);
         scene["line_simplified"].splice(scene.historyIndex + 1);
@@ -1131,142 +1453,72 @@ function Panel() {
         scene["merge_hint"].push(null);
         scene["split_hint"].push(null);
         scene.historyIndex = scene.image.length - 1;
-
-        /*
-        Old codes
-        */
-        // console.log('Saving images...')
-        // await saveBase64Image(image, `${fileName}-result.png`)
-        // await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`) 
-        // layers.forEach(async(layer, index) => {
-        //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
-        // })
-
-        
-        // console.log('Loading images....')
-        // await loadResult(fileName, true)          
-        // await loadLineSimplified(fileName, true)
-        // await selectLayerByName("merge-hint")
-                
         scenesGlobal = scenesGlobal.map(s => {
             if (s.documentID === app.activeDocument._id)
                 return scene;
             else
                 return s;
         })
+
+        console.log('Loading result');
+        if (fastHistory){
+            // remove layer group that is above the current working layergroup
+            let cutIndex = doc.layerTree.indexOf(layerGroup);
+            for (let i = cutIndex - 1; i>=0; i--){
+                if (doc.layerTree[i].children){
+                    doc.layerTree[i].children.forEach((layer)=>{
+                                         layer.locked = false;
+                                         if (layer.locked){
+                                            forceUnlock(layer);
+                                         }
+                                         layer.delete()
+                                     });
+                }
+                    
+                await doc.layerTree[i].delete();
+            }
+            await displayScene(0);
+        }
+        else{
+            let newLayer1 = await createLinkLayer("result_neural", image);
+            if (newLayer1 === null){
+                return null;
+            }
+            await moveResultLayerBack(newLayer1);
+
+            console.log('Loading line simplified');
+            let newLayer2 = await createLinkLayer("line_simplified", line_simplified);
+            if (newLayer2 === null){
+                return null;
+            }
+            await moveSimplifiedLayerBack(newLayer2);
+            mergeLayer.selected = true;
+        }
         setScenes(scenesGlobal)
-        console.log('scenes saved in React state')
+        console.log('scenes saved in React state')        
+        
     }
-
-    // async function splitcoarse() {
-    //     console.log('Coarse Splitting...')
-    //     const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
-    //     const { fileName } = scene;
-        
-    //     let splitLayer = await saveCoarseSplitHintLayer();
-    //     const stroke = await loadBase64('split-hint-coarse.png')
-
-    //     // load the fill results
-    //     await saveFillNeuralLayer();
-    //     const fill_neural = await loadBase64('fill-neural.png');
-        
-    //     await saveLineArtistLayer();
-    //     const line_artist = await loadBase64('line-artist.png');
-        
-    //     const data = {
-    //         line_artist: line_artist,
-    //         fill_neural: fill_neural,
-    //         fill_artist: scene.fill_artist,
-    //         stroke,
-    //     }
-    //     console.log('sending request...')
-    //     var url;
-    //     if (backEnd === "remote"){
-    //         url = 'http://68.100.80.232:8080/splitauto';    
-    //     }
-    //     else{
-    //         url = 'http://127.0.0.1:8080/splitauto';
-    //     }
-
-    //     const response = await fetch(url, {
-    //         method: 'POST', 
-    //         headers: {
-    //           'Content-Type': 'application/json'
-    //         },
-    //         body: JSON.stringify(data)
-    //     })
-    //     console.log('got response')
-    //     console.log(response)
-        
-    //     const result = await response.json();
-    //     console.log('got result')
-    //     console.log(result)
-
-    //     const { line_simplified, image} = result;
-    //     console.log('Splitting done!')
-
-    //     console.log('Loading result');
-    //     let newLayer = await createLinkLayer("result_neural", image);
-    //     if (newLayer === null){
-    //         return null;
-    //     }
-    //     await moveResultLayerBack(newLayer);
-
-    //     console.log('Loading line simplified');
-    //     newLayer = await createLinkLayer("line_simplified", line_simplified);
-    //     if (newLayer === null){
-    //         return null;
-    //     }
-    //     await moveSimplifiedLayerBack(newLayer);
-
-    //     splitLayer.selected = true;
-    //     /*
-    //     Old codes
-    //     */
-    //     // console.log('Saving images...')
-    //     // await saveBase64Image(image, `${fileName}-result.png`)
-    //     // await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`)
-    //     // layers.forEach(async(layer, index) => {
-    //     //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
-    //     // })
-        
-    //     // console.log('Loading image....')
-    //     // await loadResult(fileName, true)
-    //     // await loadLineSimplified(fileName, true)
-    //     // await selectLayerByName('split-hint')
-
-    //     const newScenes = scenes.map(scene => {
-    //         if (scene.documentID === app.activeDocument._id) {
-    //             return {
-    //                 ...scene,
-    //                 fill_neural,
-    //                 image,
-    //             }
-    //         }
-    //         return scene
-    //     })
-    //     setScenes(newScenes)
-    //     console.log('scenes saved in React state')
-    // }
 
     async function splitfine() {
         console.log('Fine Splitting...');
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0];
+        const doc = app.activeDocument;
+        let splitLayer;
+        var layerGroup;
+        if (fastHistory){
+            layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
+            splitLayer = await saveFineSplitHintLayer(layerGroup);
+        }
+        else
+            splitLayer = await saveFineSplitHintLayer();
         
-        
-        let splitLayer = await saveFineSplitHintLayer();
         if (splitLayer === false){
             return false;
         }
         const stroke = await loadBase64('split-hint-fine.png');
 
         // load the fill results
-        // await saveFillNeuralLayer();
-        // const fill_neural_in = await loadBase64('fill-neural.png');
         const fill_neural_in = scene.image[scene.historyIndex];
-        
-        // await saveLineArtistLayer();
-        // const line_artist_in = await loadBase64('line-artist.png');
         
         let line_artist_in;
         if (scene.line_artist[scene.historyIndex] !== null && (scene.historyIndex) !== 1){
@@ -1315,53 +1567,6 @@ function Panel() {
         const { line_artist, line_simplified, image, fill_artist, line_hint } = result;
         console.log('Splitting done!');
 
-        console.log('Loading result');
-        let newLayer1 = await createLinkLayer("result_neural", image);
-        if (newLayer1 === null){
-            return null;
-        }
-        await moveResultLayerBack(newLayer1);
-
-        console.log('Loading line artist');
-        let newLayer2 = await createLinkLayer("line_artist", line_artist);
-        if (newLayer2 === null){
-            return null;
-        }
-        await moveArtistLayerBack(newLayer2);
-
-        console.log('Loading line hint');
-        let newLayer4 = await createLinkLayer("line_hint", line_hint);
-        if (newLayer4 === null){
-            return null;
-        }
-        await moveLineHintLayerBack(newLayer4);
-
-        console.log('Loading line simplified');
-        let newLayer3 = await createLinkLayer("line_simplified", line_simplified);
-        if (newLayer3 === null){
-            return null;
-        }
-        await moveSimplifiedLayerBack(newLayer3);
-
-        splitLayer.selected = true;
-
-        /*
-        Old way of loading layers 
-        */
-        // console.log('Saving images...');
-        // const { fileName } = scene;
-        // await saveBase64Image(image, `${fileName}-result.png`);
-        // await saveBase64Image(line_simplified, `${fileName}-line_simplified.png`);
-        // await saveBase64Image(line_artist, `${fileName}-line_artist.png`)
-        // layers.forEach(async(layer, index) => {
-        //     await saveBase64Image(layer, `${fileName}-segment-${index}.png`)
-        // });
-        
-        // console.log('Loading image....');
-        // await loadLineArtist(fileName, true);
-        // await loadResult(fileName, true);
-        // await loadLineSimplified(fileName, true); 
-        // await selectLayerByName('split-hint')
 
         // remove all history that after current index
         scene["line_artist"].splice(scene.historyIndex + 1);
@@ -1391,6 +1596,56 @@ function Panel() {
             else
                 return s
         })
+
+        console.log('Loading result');
+        if (fastHistory){
+            // remove layer group that is above the current working layergroup
+            let cutIndex = doc.layerTree.indexOf(layerGroup);
+            for (let i = cutIndex - 1; i>=0; i--){
+                if (doc.layerTree[i].children){
+                    doc.layerTree[i].children.forEach((layer)=>{
+                                         layer.locked = false;
+                                         if (layer.locked){
+                                            forceUnlock(layer);
+                                         }
+                                         layer.delete()
+                                     });
+                }
+                    
+                await doc.layerTree[i].delete();
+            }
+            await displayScene(0);
+        }
+        else{
+            let newLayer1 = await createLinkLayer("result_neural", image);
+            if (newLayer1 === null){
+                return null;
+            }
+            await moveResultLayerBack(newLayer1);
+
+            console.log('Loading line artist');
+            let newLayer2 = await createLinkLayer("line_artist", line_artist);
+            if (newLayer2 === null){
+                return null;
+            }
+            await moveArtistLayerBack(newLayer2);
+
+            console.log('Loading line hint');
+            let newLayer4 = await createLinkLayer("line_hint", line_hint);
+            if (newLayer4 === null){
+                return null;
+            }
+            await moveLineHintLayerBack(newLayer4);
+
+            console.log('Loading line simplified');
+            let newLayer3 = await createLinkLayer("line_simplified", line_simplified);
+            if (newLayer3 === null){
+                return null;
+            }
+            await moveSimplifiedLayerBack(newLayer3);
+        }
+            
+        splitLayer.selected = true;
         setScenes(scenesGlobal);
         console.log('scenes saved in React state');
 
@@ -1414,7 +1669,7 @@ function Panel() {
         else
             flattingSubmission++;
         setIsFlatting(false);
-        setScenes([...scenes, ...newScenes]);
+        setScenes([...scenesGlobal, ...newScenes]);
         
         // StartFlatting = false;
         // tryFlat();
@@ -1468,13 +1723,133 @@ function Panel() {
             else if (brushMode ===  'splitcoarse'){
                 return SplitButtonCoarse; 
             }}
-    
+
+    async function handleFineSplitToolClickFast(brushSize) {
+        const doc = app.activeDocument;
+        const scene = scenesGlobal.filter((s)=>s.documentID===app.activeDocument._id)[0];
+        const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
+        let splitHintLayer = await getLayerByName("split-hint", layerGroup);
+        let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
+        
+        // unselect other layers 
+        doc.layers.forEach((layer)=>{
+                    if (layer.selected === true)
+                        layer.selected = false
+                });
+
+        if (splitHintLayer){
+            if (layerGroup.locked)
+                layerGroup.locked = false;
+            if (splitHintLayer.selected===false)
+                splitHintLayer.selected = true;
+        };
+
+        if (layerMergeHint.visible)
+            layerMergeHint.visible = false;
+
+        if (photoshop.app.currentTool.id !== "pencilTool")
+            await activatePencil();
+        
+        const batchPlay = photoshop.action.batchPlay;
+        const result = await batchPlay(
+        [
+           {
+              "_obj": "set",
+              "_target": [
+                 {
+                    "_ref": "brush",
+                    "_enum": "ordinal",
+                    "_value": "targetEnum"
+                 }
+              ],
+              "to": {
+                 "_obj": "brush",
+                 "masterDiameter": {
+                    "_unit": "pixelsUnit",
+                    "_value": brushSize
+                 }
+              },
+              "_isCommand": true,
+              "_options": {
+                 "dialogOptions": "dontDisplay"
+              }
+           }
+        ],{
+           "synchronousExecution": false,
+           "modalBehavior": "fail"
+        });
+
+        await setColorYellow();
+}
+
+    async function handleMergeToolClickFast(brushSize) {
+        // find current working layergroup
+        const doc = app.activeDocument;
+        const scene = scenesGlobal.filter((s)=>s.documentID===app.activeDocument._id)[0];
+        const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
+        let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
+        let layerSplitHint = await getLayerByName("split-hint", layerGroup);
+        
+        // unselect other layers 
+        doc.layers.forEach((layer)=>{
+                    if (layer.selected === true)
+                        layer.selected = false
+                });
+
+        if (layerMergeHint){
+            layerGroup.locked = false;
+            layerGroup.selected = false
+            layerMergeHint.selected = true;
+        };
+
+        if (layerSplitHint.visible)
+            layerSplitHint.visible = false;
+
+        if (photoshop.app.currentTool.id !== "pencilTool")
+            await activatePencil();
+
+        // this is wired, the batch play must be runed in the same jsx file
+        // otherwise it will not work
+        const batchPlay = photoshop.action.batchPlay;
+        const result = await batchPlay(
+        [
+           {
+              "_obj": "set",
+              "_target": [
+                 {
+                    "_ref": "brush",
+                    "_enum": "ordinal",
+                    "_value": "targetEnum"
+                 }
+              ],
+              "to": {
+                 "_obj": "brush",
+                 "masterDiameter": {
+                    "_unit": "pixelsUnit",
+                    "_value": brushSize
+                 }
+              },
+              "_isCommand": true,
+              "_options": {
+                 "dialogOptions": "dontDisplay"
+              }
+           }
+        ],{
+           "synchronousExecution": false,
+           "modalBehavior": "fail"
+        });
+
+    }
+
     const handleColorBlobClick = async(name, color) => {
         setSelectedColor(name+color);
-        await activatePaintBucket();
         await setColor(color);
-        handleMergeToolClick(document.querySelector("#mergeSlider").value);
-
+        if (fastHistory){
+            await handleMergeToolClickFast(document.querySelector("#mergeSlider").value);
+        }
+        else{
+            await handleMergeToolClick(document.querySelector("#mergeSlider").value);
+        }
     }
  
     const ColorBlob = ({name, color, selected, label }) => {
@@ -1552,7 +1927,7 @@ function Panel() {
                         </div>
                         {props.text}
                     </sp-action-button>
-                    <sp-action-button label="Refresh" onClick={reorderFlat}>
+                    <sp-action-button label="Refresh" onClick={()=>{reorderFlat(app.activeDocument.layers)}}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
                               <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" />
@@ -1588,7 +1963,8 @@ function Panel() {
             <sp-body size="XS" 
                     style={{    display: "block",
                                 height:"150px",
-                                overflowY:"scroll"}}>
+                                overflowY:"scroll",
+                                overflowX: "hidden"}}>
                 {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
                 <sp-slider
                     id="mergeSlider"
@@ -1617,7 +1993,8 @@ function Panel() {
         <div style={TabDIV}>
             <div class="group" ><sp-label>Instruction</sp-label>
                 <sp-body size="XS"
-                         style={{    display: "block",
+                         style={{    
+                                display: "block",
                                 height:"150px",
                                 overflowY:"scroll"}}>
                    Should we put some illuastration here?
@@ -1630,7 +2007,7 @@ function Panel() {
 
     // We need a new tab to edit palette
     const PaletteTab = (
-    <>
+    <div style={{display: "block", height:"130vh",  overflowY: "scroll"}}>
         <div class="group"><sp-label>Choosing backend</sp-label>
                 <sp-radio-group selected={backEnd} name="backend">
                     <sp-radio value="local" onClick={()=>setBackEnd("local")}>Local</sp-radio>
@@ -1708,11 +2085,11 @@ function Panel() {
             </sp-body>
         </div>
         
-    </>
+    </div>
     )
     // the code that construct the panel
     return (
-        <Grid container className={classes.root}>
+        <Grid container className={classes.root} style={{overflowY: "hidden"}}>
             
             <Grid item xs={5} className={classes.scenes}>
                 <Scenes scenes={scenes}

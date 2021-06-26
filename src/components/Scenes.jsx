@@ -16,6 +16,18 @@ import btoa from "btoa";
 const app = photoshop.app;
 const { confirm } = require("../lib/dialogs.js");
 
+function constrain(str,n){
+    var words = str.split("");
+    var resultstr = "";
+    for(var i = 0; i < words.length; i++ ){
+        if((resultstr + words[i] + " ").length>=n){
+            resultstr += "…";
+            break;
+        }
+        resultstr += words[i];
+    }
+    return resultstr;
+};
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -106,7 +118,7 @@ function Scene({ fileName, id, image, activeScene, setActiveScene,
         
     }
     const fileURL = `data:image/png;base64, ${image}`;
-    
+    const showName = constrain(fileName, 8);
 
     // const StatedItemText = (props)=>{
     //     <ListItemText primary={flatted ? fileName : props.text} style={{color:"#fff"}}/>
@@ -129,7 +141,7 @@ function Scene({ fileName, id, image, activeScene, setActiveScene,
                 </Avatar>
             </ListItemAvatar>
             
-             <ListItemText primary={flatted ? fileName : "Working"} style={{color:"#fff"}}/>
+             <ListItemText primary={flatted ? showName : "Working"} style={{color:"#fff"}}/>
             
            <ListItemSecondaryAction>
                 <IconButton 
@@ -159,7 +171,7 @@ export default function Scenes({ scenes, activeScene, setActiveScene, setIsFlatt
             {scenes.map((scene) => <Scene activeScene={activeScene}
                                         setActiveScene={setActiveScene}
                                         key={scene.documentID}
-                                        image={scene.image[scene.historyIndex]}
+                                        image={Array.isArray(scene.image)? scene.image[scene.historyIndex]:scene.image}
                                         id={scene.documentID}
                                         fileName={scene.fileName}
                                         setIsFlatting={setIsFlatting}
