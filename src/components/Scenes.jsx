@@ -99,6 +99,9 @@ function Scene({ fileName, id, image, activeScene, setActiveScene,
                 })
                 setScenes(scenesNew);    
             }
+            else
+                setIsFlatting(false);
+
         }
         else
             setIsFlatting(true);
@@ -148,7 +151,7 @@ function Scene({ fileName, id, image, activeScene, setActiveScene,
                     edge="end" 
                     aria-label="delete" 
                     size="small" 
-                    style={{width: 30, height: 20, padding: 0, color:"#fff"}}
+                    style={{width: 30, height: 20, padding: 0, color:"#fff", margin: "auto"}}
                     onClick={()=>removeScene(id, getScenes, setScenes, setIsInitail)}>
                   x
                 </IconButton>

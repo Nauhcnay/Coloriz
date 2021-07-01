@@ -16,6 +16,8 @@ const { confirm } = require("./lib/dialogs.js");
 // const fd = uxp.storage.Folder;
 const Buffer = require('buffer/').Buffer;
 
+var isReading = false;
+
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));``
 }
@@ -352,7 +354,7 @@ async function setColorRed() {
 
 }
 
-async function setColorYellow() {
+export async function setColorYellow() {
     const result = await batchPlay(
     [
     {
@@ -751,88 +753,104 @@ async function showConfirm(doc, w_new, h_new, th) {
 
 // Open files and read their id, filename, and base64 string
 export async function readFiles() {
-    // pop up a dialog to select images 
-    const files = await fs.getFileForOpening({
-        allowMultiple: true,
-        types: st.fileTypes.images
-    });
-    // save the path of all opened files
-    // maybe useful, I don't know
-    files.forEach(async (file) => {
-        const fileName = file.name;
-        const path = file.nativePath.replace(fileName, '');
-        // const workingFolder = fs.createEntry(path, {type:st.types.folder})
-        // let token = await fs.createPersistentToken(workingFolder);
-        
-        // https://www.adobe.io/xd/uxp/uxp/reference-js/Global%20Members/Data%20Storage/LocalStorage/
-        // accroding to the link above, localStorage can only stroe string
-        // why...why? orz
-        localStorage.setItem(fileName, path);
-        // localStorage.setItem(fileName + '_token', token);
-
-    })
-    
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map
-    // update all opend images into the plugin panel
-    const newScenes = await Promise.all(files.map(async (file) => {
-        // read file and convert it to base64 code
-        const fileContents = await file.read({format: uxp.storage.formats.binary});
-        let base64String = _arrayBufferToBase64(fileContents);
-        // open file in photoshop
-        const doc = await app.open(file);
-        let w = doc.width;
-        let h = doc.height;
-        let th = 2000;
-        let w_new = w;
-        let h_new = h;
-        let r = 0;
-        let resize = false;
-        // if the image is too large, resize it first
-        if (w > th && h > th){
-            // compute the new width and height
-            if (w > h){
-                r = w/h;
-                h_new = th;
-                w_new = r*th;
-            }
-            else{
-                r = h/w;
-                w_new = th;
-                h_new = r*th;
-            }
-            // pop out a dialog to ask user to decide
-            resize = await showConfirm(doc, w_new, h_new, th); 
-        }
-        // 
-        await sleep(300);
-        // rename and hide the opened image 
-        if (app.activeDocument.activeLayers[0].locked === true){
-            app.activeDocument.activeLayers[0].locked = false; //this is the best way to lock or unlock layer
-            app.activeDocument.activeLayers[0].name = file.name; // and rename layer
-            // app.activeDocument.activeLayers[0].visible = false;
-            app.activeDocument.activeLayers[0].locked = true;
-        }
-        const documentID = doc._id;
-        const fileName = doc.title;
-        // save result to newSecne
-        return {
-            documentID,
-            fileName,
-            base64String,
-            image: [base64String],
-            flatted: false,
-            displayed: false,
-            resize,
-            clicked:false,
-            historyIndex: 0,
-        }    
-    }))
-    if (await ensurePersistentToken()){
-        // return new scene
-        return newScenes;    
+    // this is to avoid two open dialog pop out on windows
+    if (isReading){
+        return [];
     }
-    else{
+    isReading = true;
+
+    try{
+        // pop up a dialog to select images 
+        const files = await fs.getFileForOpening({
+            allowMultiple: true,
+            types: st.fileTypes.images
+        });
+        // save the path of all opened files
+        // maybe useful, I don't know
+        files.forEach(async (file) => {
+            const fileName = file.name;
+            const path = file.nativePath.replace(fileName, '');
+            // const workingFolder = fs.createEntry(path, {type:st.types.folder})
+            // let token = await fs.createPersistentToken(workingFolder);
+            
+            // https://www.adobe.io/xd/uxp/uxp/reference-js/Global%20Members/Data%20Storage/LocalStorage/
+            // accroding to the link above, localStorage can only stroe string
+            // why...why? orz
+            localStorage.setItem(fileName, path);
+            // localStorage.setItem(fileName + '_token', token);
+
+        })
+        
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map
+        // update all opend images into the plugin panel
+        const newScenes = await Promise.all(files.map(async (file) => {
+            // read file and convert it to base64 code
+            const fileContents = await file.read({format: uxp.storage.formats.binary});
+            let base64String = _arrayBufferToBase64(fileContents);
+            // open file in photoshop
+            const doc = await app.open(file);
+            let w = doc.width;
+            let h = doc.height;
+            let th = 2000;
+            let w_new = w;
+            let h_new = h;
+            let r = 0;
+            let resize = false;
+            // if the image is too large, resize it first
+            if (w > th && h > th){
+                // compute the new width and height
+                if (w > h){
+                    r = w/h;
+                    h_new = th;
+                    w_new = r*th;
+                }
+                else{
+                    r = h/w;
+                    w_new = th;
+                    h_new = r*th;
+                }
+                // pop out a dialog to ask user to decide
+                resize = await showConfirm(doc, w_new, h_new, th); 
+            }
+            // 
+            await sleep(300);
+            // rename and hide the opened image 
+            if (app.activeDocument.activeLayers[0].locked === true){
+                app.activeDocument.activeLayers[0].locked = false; //this is the best way to lock or unlock layer
+                app.activeDocument.activeLayers[0].name = file.name; // and rename layer
+                // app.activeDocument.activeLayers[0].visible = false;
+                app.activeDocument.activeLayers[0].locked = true;
+            }
+            const documentID = doc._id;
+            const fileName = doc.title;
+            // save result to newSecne
+            return {
+                documentID,
+                fileName,
+                base64String,
+                image: [base64String],
+                flatted: false,
+                displayed: false,
+                resize,
+                "newSize":[w_new, h_new],
+                clicked:false,
+                historyIndex: 0,
+            }    
+        }))
+
+        isReading = false;
+        if (await ensurePersistentToken()){
+            // return new scene
+            return newScenes;    
+        }
+        else{
+            return [];
+        }
+    }
+    catch (e){
+        console.log(e);
+        isReading = false;
         return [];
     }
     
@@ -849,10 +867,12 @@ async function confirmContinue() {
 async function setPersistentFolder() {
     // let's get the default temp folder, we don't need those intermediate files
     let platform = os.platform()
+    let tempPath;
+    let answer;
     if (platform === "darwin"){
-        let tempPath = "/tmp/";
+        tempPath = "/tmp/";
         navigator.clipboard.writeText({"text/plain": tempPath});
-        let answer = await confirm(
+        answer = await confirm(
           "Please indicate the temporary folder path", //[1]
           "Use 'shift + command + g' and paste the temp folder path in the next open file dailog, then click 'open'.",
           ["Cancel", "Continue"]);
@@ -863,12 +883,12 @@ async function setPersistentFolder() {
         }
     }
     else if (platform === "win32"){
-        let tempPath = "c:\\temp\\flatting_temp";
-        navigator.clipboard.writeText({"text/plain": tempPath});
-        let answer = await confirm(
+        tempPath = "c:\\temp\\flatting_temp";
+        // navigator.clipboard.writeText({"text/plain": tempPath});
+        answer = await confirm(
           "Please indicate the temporary folder path", //[1]
-          "Paste the temp folder path in the open file dailog and click 'open'. If this folder does not exsit, please create them manually ",
-          ["No", "Yes"]);
+          "Set the temp folder path to \" c:\\temp\\flatting_temp \". If this folder does not exsit, please create them manually ",
+          ["Cancel", "Continue"]);
         // app.showAlert("Please indicate the temporary folder path, paste the temp folder path in the open file dailog and click 'open'.");   
         if (answer.which === 0){
             app.showAlert("The temp folder must be specified")
@@ -876,8 +896,8 @@ async function setPersistentFolder() {
         }
     }
     else {
-        let tempPath = "/tmp/";
-        let answer = await confirm(
+        tempPath = "/tmp/";
+        answer = await confirm(
           "Please indicate the temporary folder path", //[1]
           "Can't detect the platform type, please choose the temporary folder path manually",
           ["No", "Yes"]);
@@ -887,27 +907,33 @@ async function setPersistentFolder() {
             return false;
         }
     }
-    await sleep(1000);
+    await sleep(1000); 
     // copy the path to clipboard
     let entry1 = await fs.getFolder(); 
     let token1 = await fs.createPersistentToken(entry1);
     localStorage.setItem("persistentFolder", token1);
     localStorage.setItem("persistentPath", entry1.nativePath);
-    let answer = await confirm(
-      "Please indicate the resize folder path", //[1]
-      "Resize folder is the path which stroes resized image if its size is too large",
-      ["No", "Yes"]);
+    
+    answer = await confirm(
+      "Wanna to save the resized file to a different place?", //[1]
+      "If the image's size is too large, it will be resized and saved to a new path, Cancel for use the same path as temp folder",
+      ["Cancel", "Continue"]);
     // app.showAlert("Can't detect the platform type, please choose the temporary folder path manually");
     if (answer.which === 0){
-        app.showAlert("The resize folder must be specified")
-        return false;
+        
+        await sleep(1000);
+        localStorage.setItem("resizeFolder", token1);
+        localStorage.setItem("resizePath", entry1.nativePath);
     }
-    // app.showAlert("Please select the resize folder");
-    await sleep(1000);
-    let entry2 = await fs.getFolder(); 
-    let token2 = await fs.createPersistentToken(entry2);
-    localStorage.setItem("resizeFolder", token2);
-    localStorage.setItem("resizePath", entry2.nativePath);
+    else{
+        await sleep(1000);
+        let entry2 = await fs.getFolder(); 
+        let token2 = await fs.createPersistentToken(entry2);
+        localStorage.setItem("resizeFolder", token2);
+        localStorage.setItem("resizePath", entry2.nativePath);
+    }
+    
+        
     return true;
 
 }
@@ -1031,12 +1057,13 @@ export async function saveMergeHintLayer(layerGroup=app.activeDocument.layers) {
     if (await saveLayerByName('merge-hint', 'merge-hint.png', layerGroup)){
         // clear the content in this layer
         // but if it is in a group, then we don't need to cleanup
+        let layer;
         if (layerGroup.isGroupLayer === undefined){
-            let layer = await cleanLayerbyName('merge-hint');
+            layer = await cleanLayerbyName('merge-hint');
             return layer;
         }
         else{
-            let layer = await getLayerByName('merge-hint', layerGroup);
+            layer = await getLayerByName('merge-hint', layerGroup);
             return layer;
         }
     }
@@ -1056,12 +1083,13 @@ export async function saveFillNeuralLayer(layerGroup=app.activeDocument.layers) 
 
 export async function saveFineSplitHintLayer(layerGroup=app.activeDocument.layers) {
     if (await saveLayerByName('split-hint', 'split-hint-fine.png', layerGroup)){
+        let layer;
         if (layerGroup.isGroupLayer){
-            let layer = await getLayerByName('split-hint', layerGroup);
+            layer = await getLayerByName('split-hint', layerGroup);
             return layer;       
         }
         else{
-            let layer = await cleanLayerbyName('split-hint');
+            layer = await cleanLayerbyName('split-hint');
             return layer;
         }
     }
@@ -1263,49 +1291,58 @@ export async function createLinkLayer(layerName, img,
             }
             else
                 bottomLayer = doc.layers[doc.layers.length - 1];
-            // I don't want to figure out why, but just put a dirty fix here... 
-            await moveAboveTo(newLayer, bottomLayer);
+            // I don't want to figure out why, but just put a dirty fix here...
+            if (newLayer._id !== bottomLayer._id) 
+                await moveAboveTo(newLayer, bottomLayer);
         }
         
         newLayer.locked = false;
-        const batchPlay = photoshop.action.batchPlay;
-        const result = await batchPlay(
-        [
-           {
-              "_obj": "set",
-              "_target": [
-                 {
-                    "_ref": "layer",
-                    "_enum": "ordinal",
-                    "_value": "targetEnum"
-                 }
-              ],
-              "to": {
-                 "_obj": "layer",
-                 "mode": {
-                    "_enum": "blendMode",
-                    "_value": "multiply"
-                 }
-              },
-              "_isCommand": true,
-              "_options": {
-                 "dialogOptions": "dontDisplay"
-              }
-           }
-        ],{
-           "synchronousExecution": false,
-           "modalBehavior": "fail"
-        });
+        await setLayerMultiply();
+            
+    }
+    else if (layerName === "line_artist"){
+        newLayer.locked = false;
+        await setLayerMultiply();
+        newLayer.locked = true;
     }
     else{
         newLayer.locked = locked;
         newLayer.selected = select;    
     }
-    
-    
-    
+     
     return newLayer;
 }    
+
+async function setLayerMultiply(){
+    const batchPlay = photoshop.action.batchPlay;
+    const result = await batchPlay(
+    [
+       {
+          "_obj": "set",
+          "_target": [
+             {
+                "_ref": "layer",
+                "_enum": "ordinal",
+                "_value": "targetEnum"
+             }
+          ],
+          "to": {
+             "_obj": "layer",
+             "mode": {
+                "_enum": "blendMode",
+                "_value": "multiply"
+             }
+          },
+          "_isCommand": true,
+          "_options": {
+             "dialogOptions": "dontDisplay"
+          }
+       }
+    ],{
+       "synchronousExecution": false,
+       "modalBehavior": "fail"
+    });
+}
 
 function findActionByName(actionName){
     let flattingAction = actionTree.filter((a)=> a.name === "Flatting actions");

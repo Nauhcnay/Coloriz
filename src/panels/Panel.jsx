@@ -47,7 +47,9 @@ import {
     moveAboveTo,
     moveBelowTo,
     activatePencil,
-    setBrushSize
+    setBrushSize,
+    ensurePersistentToken,
+    setColorYellow
 } from '../functions';
 
 import { Modal } from 'antd'; // why import this line? it is not used anywhere
@@ -308,12 +310,20 @@ const ThreeStateButton = (props) => (
     </Button>
 );
 
-const colors_test = ['#4D4D4D', '#999999', '#FFFFFF', '#F44E3B', '#FE9200', '#FCDC00', '#DBDF00', '#A4DD00', '#68CCCA', '#73D8FF', '#AEA1FF', '#FDA1FF'];
-const colors_test_map_1 = colors_test.map((c)=>{return {"label": "label a", "color":c}})
-const colors_test_map_2 = colors_test.map((c)=>{return {"label": "label b", "color":c}})
+// const colors_test = ['#4c69f6', "#4c94f6", "#f6db35", "#ffc510", "#ee5454"];
+// const colors_test_map_1 = colors_test.map((c)=>{return {"label": "label a", "color":c}})
+const ComicBook = [{"label": '#4c69f6', "color":'#4c69f6'}, {"label": "#4c94f6", "color":"#4c94f6"}, 
+    {"label": "#f6db35", "color": "#f6db35"}, {"label": "#ffc510", "color": "#ffc510"}, 
+    {"label": "#ee5454", "color": "#ee5454"}, {"label": "#ffffff", "color": "#ffffff"},
+    {"label": 'Spring Green', "color":'#00ff66'}, {"label": "Lime", "color":"#c1ff00"},
+    {"label": "#0f125d", "color": "#0f125d"}, {"label": "#ae7673", "color": "#ae7673"}, 
+    {"label": "#bdb1c6", "color": "#bdb1c6"}, {"label": "#4e3d69", "color": "#4e3d69"},
+    {"label": "#f3b364", "color":"#f3b364"},
+    ];
+
 let palette = [
-                    {'name':'palette A', 'colors':colors_test_map_1}, 
-                    {'name':'palette B','colors':colors_test_map_2}
+                    {'name':'Comic', 'colors':ComicBook},
+
                 ];
 
 /*
@@ -342,16 +352,23 @@ function Panel() {
     const [tab, setTab] = useState(0);
     const handleTabChange = (event, newValue) => {
         setTab(newValue);
-        if (newValue===1)
+        if (newValue===1){
+            document.querySelector("#addFlatButton").disabled = false;
             if (fastHistory)
                 handleFineSplitToolClickFast(3);
             else
                 handleFineSplitToolClick(3);
-        if (newValue===0)
+        }
+        else if (newValue===0){
+            document.querySelector("#addFlatButton").disabled = false;
             if (fastHistory)
                 handleMergeToolClickFast(mergeSize);
             else
                 handleMergeToolClick(mergeSize);
+        }
+        else
+            document.querySelector("#addFlatButton").disabled = true;
+            
       };
 
     const [isMerging, setIsMerging] = useState(false);
@@ -364,7 +381,7 @@ function Panel() {
     const [selectedColor, setSelectedColor] = React.useState(null);
     const [colorLabel, setColorLabel] = React.useState("Please select one color");
     const [selectedPalette, setSelectedPalette] = React.useState(null);
-    const [backEnd, setBackEnd] = React.useState("remote");
+    const [backEnd, setBackEnd] = React.useState("local");
 
 
 
@@ -381,6 +398,7 @@ function Panel() {
    
     // useEffect is a hook to call after state variables updated
     useEffect(() => {
+        ensurePersistentToken();
         // check if all scene have been flatted
         if (isFlattingGlobal === false && flattingSubmission > 0) {
             tryFlat();
@@ -862,6 +880,8 @@ function Panel() {
         // setFlatting(true);
         var i;
         var end = updatedScenes.length;
+        let w_new;
+        let h_new;
         for (i = 0; i < end; i++){
             console.log('Flatting image: ' + updatedScenes[i].fileName);
             try{
@@ -870,23 +890,9 @@ function Panel() {
                     // resize the doc if necessary
                     let doc = docs.filter(d=>d._id === updatedScenes[i].documentID)[0];
                     if (updatedScenes[i].resize){
-                        // compute the new size of the doc
-                        let h_new;
-                        let w_new;
-                        let r;
-                        let th=2000
-                        let w = doc.width;
-                        let h = doc.height;
-                        if (w > h){
-                            r = w/h;
-                            h_new = th;
-                            w_new = r*th;
-                        }
-                        else{
-                            r = h/w;
-                            w_new = th;
-                            h_new = r*th;
-                        }
+                        // get the new size of the doc
+                        w_new = updatedScenes[i].newSize[0];
+                        h_new = updatedScenes[i].newSize[1];
                         // save to new file and resize
                         const resizeFolderToken = await localStorage.getItem("resizeFolder");
                         const resizeFolder = await fs.getEntryForPersistentToken(resizeFolderToken);
@@ -962,82 +968,82 @@ function Panel() {
         }
         setIsSplitting(false)
     }
-    async function flatSingleBackground(targetScene){
+    async function flatSingleBackground(targetScene, failed=0, backServer=backEnd){
         // read data from selected input
         // const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
-        const { fileName, documentID, base64String, resize } = targetScene;
-        
-        // convert readed data to the input format of API
-        const data = {
-            image: base64String,
-            net: 512,
-            radius: 1,
-            preview: false,
-            resize
+        if (failed > 2){
+            app.showAlert("Flatting failed on both local and remote back end, please check your network or make sure the local server is running");
+            return targetScene;
         }
+        try{
+            const { fileName, documentID, base64String, resize } = targetScene;
+            const doc = app.documents.filter((d)=>d._id===documentID)[0];
+            // get the new size if the doc is resized
+            let data;
+            if (resize){
+                data = {
+                        image: base64String,
+                        net: 512,
+                        radius: 1,
+                        preview: false,
+                        resize,
+                        newSize: [doc.width, doc.height]}
+            }
+            else {
+                data = {
+                        image: base64String,
+                        net: 512,
+                        radius: 1,
+                        preview: false,
+                        resize}
+            }
 
-        // construct the server API entrance
-        // Todo: make this apprea on the panel, let is editable
-        var url;
-        if (backEnd === "remote"){
-            url = 'http://68.100.80.232:8080/flatsingle';    
+            // construct the server API entrance
+            // Todo: make this apprea on the panel, let is editable
+            var url;
+            if (backServer === "remote"){
+                url = 'http://68.100.80.232:8080/flatsingle';    
+            }
+            else{
+                url = 'http://127.0.0.1:8080/flatsingle';
+            }
+            
+
+            // get return result
+            const response = await fetch(url, {
+                method: 'POST', 
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            const result = await response.json();
+            const { line_artist, line_simplified, image, line_hint, fill_artist } = result;
+            console.log('Flatting done!')
+
+            targetScene["flatted"] = true;
+            targetScene["line_artist"] = [null, line_artist];
+            targetScene["line_simplified"] = [null, line_simplified];
+            targetScene["image"].push(image);
+            targetScene["fill_artist"] = [null, fill_artist];
+            targetScene["line_hint"] = [null, line_hint];
+            // these two layers also need to be added into the undo list
+            targetScene["merge_hint"] = [null, null];
+            targetScene["split_hint"] = [null, null];
+            targetScene["historyIndex"]++;      
+            
+            return targetScene;
         }
-        else{
-            url = 'http://127.0.0.1:8080/flatsingle';
+        catch (e){
+            let newBackServer;
+            console.log("Flatting error, switching to different backend and retry");
+            if (backEnd==="local")
+                newBackServer = 'remote';
+            else
+                newBackServer = 'local';
+            return await flatSingleBackground(targetScene, failed + 1, newBackServer);
         }
-        
-
-        // get return result
-        const response = await fetch(url, {
-            method: 'POST', 
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        })
-        const result = await response.json();
-        const { line_artist, line_simplified, image, line_hint, fill_artist } = result;
-        console.log('Flatting done!')
-
-        // if (fastHistory){
-        //     // in fast history mode, we don't need to waste memory to save a large scene
-        //     // no we also need this feature, 
-        //     targetScene["flatted"] = true;
-        //     targetScene["line_artist"] = line_artist;
-        //     targetScene["line_simplified"] = line_simplified;
-        //     targetScene["image"] = image;
-        //     targetScene["fill_artist"] = fill_artist;
-        //     targetScene["line_hint"] = line_hint;
-        //     // these two layers also need to be added into the undo list
-        //     targetScene["merge_hint"] = null;
-        //     targetScene["split_hint"] = null;
-        //     targetScene["historyIndex"]++;
-        // }
-        // else{
-        //     targetScene["flatted"] = true;
-        //     targetScene["line_artist"] = [null, line_artist];
-        //     targetScene["line_simplified"] = [null, line_simplified];
-        //     targetScene["image"].push(image);
-        //     targetScene["fill_artist"] = [null, fill_artist];
-        //     targetScene["line_hint"] = [null, line_hint];
-        //     // these two layers also need to be added into the undo list
-        //     targetScene["merge_hint"] = [null, null];
-        //     targetScene["split_hint"] = [null, null];
-        //     targetScene["historyIndex"]++;      
-        // }
-
-        targetScene["flatted"] = true;
-        targetScene["line_artist"] = [null, line_artist];
-        targetScene["line_simplified"] = [null, line_simplified];
-        targetScene["image"].push(image);
-        targetScene["fill_artist"] = [null, fill_artist];
-        targetScene["line_hint"] = [null, line_hint];
-        // these two layers also need to be added into the undo list
-        targetScene["merge_hint"] = [null, null];
-        targetScene["split_hint"] = [null, null];
-        targetScene["historyIndex"]++;      
-        
-        return targetScene;
+            
     }
 
     
@@ -1074,25 +1080,7 @@ function Panel() {
             var merge_hint;
             var split_hint;
             let layerGroup;
-            // if (fastHistory){
-            //     scene.historyIndex = scene.historyIndex + offset;
-            //     line_artist = scene.line_artist;
-            //     line_simplified = scene.line_simplified;
-            //     image = scene.image;
-            //     line_hint = scene.line_hint;
-            //     merge_hint = scene.merge_hint;
-            //     split_hint = scene.split_hint;
-            // }
-            // else{
-            //     // the offset means the moving the 
-            //     scene.historyIndex = scene.historyIndex + offset;
-            //     line_artist = scene.line_artist[scene.historyIndex];
-            //     line_simplified = scene.line_simplified[scene.historyIndex];
-            //     image = scene.image[scene.historyIndex];
-            //     line_hint = scene.line_hint[scene.historyIndex];
-            //     merge_hint = scene.merge_hint[scene.historyIndex];
-            //     split_hint = scene.split_hint[scene.historyIndex];
-            // }
+
             scene.historyIndex = scene.historyIndex + offset;
             scene.clicked = true;
             line_artist = scene.line_artist[scene.historyIndex];
@@ -1323,14 +1311,27 @@ function Panel() {
                 }
                 else
                     layerGroup = layerGroupList[0];
-                // hide all other layergourps and show the last one only
+                // hide all other layergourps and show the selected one only
+                doc.layers.forEach(l=>{
+                    if (l.selected===true)
+                        l.selected=false;
+                });
                 for (let i=0;i<doc.layerTree.length;i++){
                     if (doc.layerTree[i].name === `Flat ${scene.historyIndex}`){
                         doc.layerTree[i].visible = true;
+                        doc.layerTree[i].children.forEach(l=>{
+                            if (l.visible===false)
+                                l.visible=true;
+                            if (l.name==="merge-hint" && tab===0)
+                                l.selected=true;
+                            else if (l.name==="split-hint" && tab===1)
+                                l.selected=true;
+                        })
                     }
                     else
                         doc.layerTree[i].visible = false;
                 }
+
                 // reorder the layergroup
                 if (offset===0)
                     await reorderFlat();
@@ -1452,7 +1453,7 @@ function Panel() {
         scene["merge_hint"][scene.merge_hint.length - 1] = stroke;
         scene["merge_hint"].push(null);
         scene["split_hint"].push(null);
-        scene.historyIndex = scene.image.length - 1;
+        scene.historyIndex++;
         scenesGlobal = scenesGlobal.map(s => {
             if (s.documentID === app.activeDocument._id)
                 return scene;
@@ -1464,6 +1465,12 @@ function Panel() {
         if (fastHistory){
             // remove layer group that is above the current working layergroup
             let cutIndex = doc.layerTree.indexOf(layerGroup);
+            if (cutIndex===-1){
+                for (let i=0; i<doc.layerTree.length;i++){
+                    if (doc.layerTree[i]._id === layerGroup._id)
+                        cutIndex = i;
+                }
+            }
             for (let i = cutIndex - 1; i>=0; i--){
                 if (doc.layerTree[i].children){
                     doc.layerTree[i].children.forEach((layer)=>{
@@ -1582,7 +1589,7 @@ function Panel() {
         scene["line_simplified"].push(line_simplified);
         scene["image"].push(image);
         scene["fill_artist"].push(fill_artist);
-        scene["line_hint"].push(null);
+        scene["line_hint"].push(line_hint);
 
         scene["merge_hint"].push(null);
         scene["split_hint"][scene.split_hint.length - 1] = stroke;
@@ -1601,6 +1608,13 @@ function Panel() {
         if (fastHistory){
             // remove layer group that is above the current working layergroup
             let cutIndex = doc.layerTree.indexOf(layerGroup);
+            // a dirty fix for windows, the indexOf seems not work on windows
+            if (cutIndex===-1){
+                for (let i=0; i<doc.layerTree.length;i++){
+                    if (doc.layerTree[i]._id === layerGroup._id)
+                        cutIndex = i;
+                }
+            }
             for (let i = cutIndex - 1; i>=0; i--){
                 if (doc.layerTree[i].children){
                     doc.layerTree[i].children.forEach((layer)=>{
@@ -1650,18 +1664,11 @@ function Panel() {
         console.log('scenes saved in React state');
 
     }
-    // till now are functions working with my API
-    // then the following should about the colorizing part
-    async function loadSegments() {
-        const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
-        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment
-        // destructuring assignment
-        const { fileName, layers } = scene;
-        await loadLayers(fileName, layers.length)       
-    }
 
     async function loadNewScenes() {
         const newScenes = await readFiles();
+        if (newScenes.length===0)
+            return null;
         if (flattingSubmission < 0){
             flattingSubmission = 0;
             flattingSubmission++;
@@ -1742,6 +1749,8 @@ function Panel() {
                 layerGroup.locked = false;
             if (splitHintLayer.selected===false)
                 splitHintLayer.selected = true;
+            if (splitHintLayer.locked===true)
+                splitHintLayer.locked=false;
         };
 
         if (layerMergeHint.visible)
@@ -1779,77 +1788,91 @@ function Panel() {
            "modalBehavior": "fail"
         });
 
+        // await setColor(color);
         await setColorYellow();
 }
 
     async function handleMergeToolClickFast(brushSize) {
         // find current working layergroup
-        const doc = app.activeDocument;
-        const scene = scenesGlobal.filter((s)=>s.documentID===app.activeDocument._id)[0];
-        const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
-        let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
-        let layerSplitHint = await getLayerByName("split-hint", layerGroup);
-        
-        // unselect other layers 
-        doc.layers.forEach((layer)=>{
-                    if (layer.selected === true)
-                        layer.selected = false
-                });
+        if (isFlatting || isInitail){
+            return null;
+        }
+        else
+        {
+            const doc = app.activeDocument;
+            const scene = scenesGlobal.filter((s)=>s.documentID===app.activeDocument._id)[0];
+            const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
+            let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
+            let layerSplitHint = await getLayerByName("split-hint", layerGroup);
+            
+            // unselect other layers 
+            doc.layers.forEach((layer)=>{
+                        if (layer.selected === true)
+                            layer.selected = false
+                    });
 
-        if (layerMergeHint){
-            layerGroup.locked = false;
-            layerGroup.selected = false
-            layerMergeHint.selected = true;
-        };
+            if (layerMergeHint){
+                layerGroup.locked = false;
+                layerGroup.selected = false
+                layerMergeHint.selected = true;
+                layerMergeHint.locked = false;
+            };
 
-        if (layerSplitHint.visible)
-            layerSplitHint.visible = false;
+            if (layerSplitHint.visible)
+                layerSplitHint.visible = false;
 
-        if (photoshop.app.currentTool.id !== "pencilTool")
-            await activatePencil();
+            if (photoshop.app.currentTool.id !== "pencilTool")
+                await activatePencil();
 
-        // this is wired, the batch play must be runed in the same jsx file
-        // otherwise it will not work
-        const batchPlay = photoshop.action.batchPlay;
-        const result = await batchPlay(
-        [
-           {
-              "_obj": "set",
-              "_target": [
-                 {
-                    "_ref": "brush",
-                    "_enum": "ordinal",
-                    "_value": "targetEnum"
-                 }
-              ],
-              "to": {
-                 "_obj": "brush",
-                 "masterDiameter": {
-                    "_unit": "pixelsUnit",
-                    "_value": brushSize
-                 }
-              },
-              "_isCommand": true,
-              "_options": {
-                 "dialogOptions": "dontDisplay"
-              }
-           }
-        ],{
-           "synchronousExecution": false,
-           "modalBehavior": "fail"
-        });
+            // this is wired, the batch play must be runed in the same jsx file
+            // otherwise it will not work
+            const batchPlay = photoshop.action.batchPlay;
+            const result = await batchPlay(
+            [
+               {
+                  "_obj": "set",
+                  "_target": [
+                     {
+                        "_ref": "brush",
+                        "_enum": "ordinal",
+                        "_value": "targetEnum"
+                     }
+                  ],
+                  "to": {
+                     "_obj": "brush",
+                     "masterDiameter": {
+                        "_unit": "pixelsUnit",
+                        "_value": brushSize
+                     }
+                  },
+                  "_isCommand": true,
+                  "_options": {
+                     "dialogOptions": "dontDisplay"
+                  }
+               }
+            ],{
+               "synchronousExecution": false,
+               "modalBehavior": "fail"
+            });
+        }
 
     }
 
     const handleColorBlobClick = async(name, color) => {
-        setSelectedColor(name+color);
-        await setColor(color);
-        if (fastHistory){
-            await handleMergeToolClickFast(document.querySelector("#mergeSlider").value);
+        if (isFlatting || isInitail)
+            return null;
+        else
+        {
+            setSelectedColor(name+color);
+            await setColor(color);
+            if (fastHistory){
+                await handleMergeToolClickFast(document.querySelector("#mergeSlider").value);
+            }
+            else{
+                await handleMergeToolClick(document.querySelector("#mergeSlider").value);
+            }
         }
-        else{
-            await handleMergeToolClick(document.querySelector("#mergeSlider").value);
-        }
+            
     }
  
     const ColorBlob = ({name, color, selected, label }) => {
@@ -1859,14 +1882,14 @@ function Panel() {
             return (
                 <Badge color="primary" variant="dot" invisible={false}>
                     <Grid 
-                        // disabled = {isFlatting || isMerging}
+                        disabled = {isFlatting}
                         onClick={() => handleColorBlobClick(name, color)} 
                         style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}/>
                 </Badge>
             );}
         else
             return <Grid 
-                        // disabled = {isFlatting || isMerging}
+                        disabled = {isFlatting}
                         onClick={() => handleColorBlobClick(name, color)} 
                         style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}/>;
     }
@@ -2010,12 +2033,12 @@ function Panel() {
     <div style={{display: "block", height:"130vh",  overflowY: "scroll"}}>
         <div class="group"><sp-label>Choosing backend</sp-label>
                 <sp-radio-group selected={backEnd} name="backend">
-                    <sp-radio value="local" onClick={()=>setBackEnd("local")}>Local</sp-radio>
-                    <sp-radio value="remote" checked onClick={()=>setBackEnd("remote")}>Remote</sp-radio>
+                    <sp-radio value="local" checked onClick={()=>setBackEnd("local")}>Local</sp-radio>
+                    <sp-radio value="remote"  onClick={()=>setBackEnd("remote")}>Remote</sp-radio>
                 </sp-radio-group>
         </div>
 
-        <div class="group" ><sp-label>Select color</sp-label>
+       {/* <div class="group" ><sp-label>Select color</sp-label>
             <sp-body size="XS" >
                 <div xs={12} style={scroll}>
                 {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
@@ -2067,7 +2090,7 @@ function Panel() {
                     </Grid>
                 </Grid>
             </sp-body>
-        </div>
+        </div>*/}
 
         <div class="group" ><sp-label>Edit Palette</sp-label>
             <sp-body size="XS" >
@@ -2077,9 +2100,6 @@ function Panel() {
                     </Grid>
                     <Grid item xs={4}>
                         <ExportPaletteButton/>
-                    </Grid>
-                    <Grid item xs={2}>
-                        <DelPaletteButton/>
                     </Grid>
                 </Grid>
             </sp-body>
@@ -2103,7 +2123,7 @@ function Panel() {
                         setflatClicked={setflatClicked}
                         isShowing={isShowing}
                         showFlat={showFlat}/>
-                <sp-action-button label="Flat" onClick={loadNewScenes}>
+                <sp-action-button id="addFlatButton" onClick={loadNewScenes}>
                     <div slot="icon" class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
                           <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" />
@@ -2120,7 +2140,8 @@ function Panel() {
                     <StyledTabs
                         value={tab}
                         onChange={handleTabChange}
-                        variant='fullWidth'>
+                        variant='fullWidth'
+                        disabled={isFlatting}>
                         <StyledTab label="Flat" />
                         <StyledTab label="Tweak" />
                         <StyledTab label="Settings" />
