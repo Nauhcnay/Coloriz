@@ -38,89 +38,99 @@ async function asyncForEach(array, callback) {
  */
  // need to improve this function, add color parameter to this function
 export async function handleMergeToolClick(brushSize) {
-    const mergeHintLayer = getMergeHintLayer()
-    // Select layer if already exists
-    if (mergeHintLayer) {
-        const result = await batchPlay(
-            [
-                {
-                    "_obj": "select",
-                    "_target": [
-                        {
-                            "_ref": "layer",
-                            "_name": "merge-hint"
+    if (isFlatting || isInitail){
+        return null;
+    }
+    else{
+        const mergeHintLayer = getMergeHintLayer()
+        // Select layer if already exists
+        if (mergeHintLayer) {
+            const result = await batchPlay(
+                [
+                    {
+                        "_obj": "select",
+                        "_target": [
+                            {
+                                "_ref": "layer",
+                                "_name": "merge-hint"
+                            }
+                        ],
+                        "makeVisible": false,
+                        "layerID": [
+                            mergeHintLayer._id
+                        ],
+                        "_isCommand": false,
+                        "_options": {
+                            "dialogOptions": "dontDisplay"
                         }
-                    ],
-                    "makeVisible": false,
-                    "layerID": [
-                        mergeHintLayer._id
-                    ],
-                    "_isCommand": false,
-                    "_options": {
-                        "dialogOptions": "dontDisplay"
                     }
+                ],
+                {
+                    "synchronousExecution": false,
+                    "modalBehavior": "fail"
                 }
-            ],
-            {
-                "synchronousExecution": false,
-                "modalBehavior": "fail"
-            }
-        );            
-        
-        if (app.activeDocument.layers[0]._id !== mergeHintLayer._id){
-            console.log("Moving merge hint layer to the top");
-            await moveLayerToTop(mergeHintLayer, true);}
-    }
+            );            
+            
+            if (app.activeDocument.layers[0]._id !== mergeHintLayer._id){
+                console.log("Moving merge hint layer to the top");
+                await moveLayerToTop(mergeHintLayer, true);}
+        }
 
-    // Otherwise create it
-    else {
-        createMergeHintLayer()
+        // Otherwise create it
+        else {
+            createMergeHintLayer()
+        }
+        await activatePencil();
+        await setBrushSize(brushSize);
+        // await setColorRed();
     }
-    await activatePencil();
-    await setBrushSize(brushSize);
-    // await setColorRed();
 }
 
 export async function handleFineSplitToolClick(brushSize) {
-    const splitHintLayer = getSplitHintLayer()
-    // Select layer if already exists
-    if (splitHintLayer) {
-        const result = await batchPlay(
-            [
-                {
-                    "_obj": "select",
-                    "_target": [
-                        {
-                            "_ref": "layer",
-                            "_name": "split-hint"
+    if (isFlatting || isInitail){
+        return null;
+    }
+    else{
+        const splitHintLayer = getSplitHintLayer()
+        // Select layer if already exists
+        if (splitHintLayer) {
+            const result = await batchPlay(
+                [
+                    {
+                        "_obj": "select",
+                        "_target": [
+                            {
+                                "_ref": "layer",
+                                "_name": "split-hint"
+                            }
+                        ],
+                        "makeVisible": false,
+                        "layerID": [
+                            splitHintLayer._id
+                        ],
+                        "_isCommand": false,
+                        "_options": {
+                            "dialogOptions": "dontDisplay"
                         }
-                    ],
-                    "makeVisible": false,
-                    "layerID": [
-                        splitHintLayer._id
-                    ],
-                    "_isCommand": false,
-                    "_options": {
-                        "dialogOptions": "dontDisplay"
                     }
+                ],
+                {
+                    "synchronousExecution": false,
+                    "modalBehavior": "fail"
                 }
-            ],
-            {
-                "synchronousExecution": false,
-                "modalBehavior": "fail"
-            }
-        );
-      if (app.activeDocument.layers[0]._id !== splitHintLayer._id){
-        console.log("Moving split hint layer to the top");
-        await moveLayerToTop(splitHintLayer, true);}            
+            );
+          if (app.activeDocument.layers[0]._id !== splitHintLayer._id){
+            console.log("Moving split hint layer to the top");
+            await moveLayerToTop(splitHintLayer, true);}            
+        }
+        // Otherwise create it
+        else {
+            createSplitHintLayer()
+        }
+        await activatePencil();
+        await setBrushSize(2);
+        await setColorYellow();
     }
-    // Otherwise create it
-    else {
-        createSplitHintLayer()
-    }
-    await activatePencil();
-    await setBrushSize(2);
-    await setColorYellow();
 }
 
 export async function handleCoarseSplitToolClick(brushSize) {

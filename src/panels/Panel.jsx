@@ -337,6 +337,7 @@ var flattingSubmission = 0;
 var isFlattingGlobal = false;
 var isShowing = false;
 var mergeSize = 10;
+var addOnly=true;
 // this option enables fast redo and undo in trade of much more layer spaces required in photoshop
 // it will store 6*n layers for each document (n is number of the colorize and tweak times)
 // disable this option will only maintain 6 layers for each document
@@ -382,6 +383,8 @@ function Panel() {
     const [colorLabel, setColorLabel] = React.useState("Please select one color");
     const [selectedPalette, setSelectedPalette] = React.useState(null);
     const [backEnd, setBackEnd] = React.useState("local");
+    const [user, setUser] = React.useState("");
+    
 
 
 
@@ -489,7 +492,74 @@ function Panel() {
         }
     };
 
+    async function toFlatLayers(){
+        console.log("export flat result to layers")
+        setIsFlatting(true);
 
+        try{
+            // get current working scene
+            const doc = app.activeDocument;
+            const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
+            const fill_neural = scene.image[scene.historyIndex];
+            const data = {fill_neural}
+
+            // if the flat layer group is created, delete it
+            let layerGroup;
+            layerGroup = await getLayerByName("Flat layers");
+            if (layerGroup && layerGroup.isGroupLayer){
+                layerGroup.children.forEach((layer)=>{
+                     layer.locked = false;
+                     if (layer.locked){
+                        forceUnlock(layer);
+                     }
+                     layer.delete();
+                });
+                await layerGroup.delete();
+            };
+            
+            // send request
+            var url;
+            if (backEnd === "remote"){
+                url = 'http://68.100.80.232:8080/flatlayers';    
+            }
+            else{
+                url = 'http://127.0.0.1:8080/flatlayers';
+            }
+            
+            // get return result
+            const response = await fetch(url, {
+                method: 'POST', 
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            const result = await response.json();
+            const {layersImage} = result;
+
+            // write all images to layers
+            let layers = [];
+            for (let i=0; i< layersImage.length; i++){
+                layers.push(await createLinkLayer(`flat_layer_${i}`, layersImage[i], true)); 
+            }
+
+            // group all writed layers
+            layerGroup = await doc.createLayerGroup({name: "Flat layers", fromLayers: layers});
+            layerGroup.visible = false;
+            setIsFlatting(false);
+
+            app.showAlert("Export sucessed, please check the \"Flat layers\" group");
+            console.log("Export sucessed")
+        }
+        catch (e){
+            setIsFlatting(false);
+            app.showAlert(string(e));
+            console.log("Export failed");
+
+        }
+            
+    }
+    
     async function reorderFlat(){
         var layerGroup;
         const doc = app.activeDocument;
@@ -804,6 +874,43 @@ function Panel() {
         
     };
 
+    async function showFlatMode(){
+        let i;
+        let end;
+        let layers;
+        if (fastHistory){
+            let layerGroup = getWorkingLayerGroup();    
+            layers = layerGroup.children;
+            end = layerGroup.children.length;
+        }
+        else{
+            layers = app.activeDocument.layers;
+            end = layers.length;
+        }
+
+        for (i=0; i < end; i++){
+            if (fastHistory){
+                if (layers[i].name === "result_neural"){
+                    layers[i].visible = true;
+                }
+                else
+                    layers[i].visible = false;
+            }
+            else{
+                if (layers[i].name === "result_neural" || i == end - 1){
+                    layers[i].visible = true;
+                }
+                else
+                    layers[i].visible = false;
+            }
+        }
+        var doc = app.activeDocument;
+        if (doc.layers[doc.layers.length-1].visible === true){
+            doc.layers[doc.layers.length-1].visible = false;    
+        }
+        
+    };
+
     async function showEditMode(){
         let i;
         let end;
@@ -823,6 +930,45 @@ function Panel() {
         }
     }
 
+    async function setAddMode(){
+        let i;
+        let end;
+        let layers;
+        if (fastHistory){
+            let layerGroup = getWorkingLayerGroup();    
+            layers = layerGroup.children;
+            end = layerGroup.children.length;
+        }
+        else{
+            layers = app.activeDocument.layers;
+            end = layers.length;
+        }
+        
+        let lineSimplifiedLayer = await getLayerByName("line_simplified", layers);
+        if (lineSimplifiedLayer.visible === false)
+            lineSimplifiedLayer.visible = true;
+        addOnly = true;
+    }
+
+    async function setFixMode(){
+        let i;
+        let end;
+        let layers;
+        if (fastHistory){
+            let layerGroup = getWorkingLayerGroup();    
+            layers = layerGroup.children;
+            end = layerGroup.children.length;
+        }
+        else{
+            layers = app.activeDocument.layers;
+            end = layers.length;
+        }
+
+        let lineSimplifiedLayer = await getLayerByName("line_simplified", layers);
+        if (lineSimplifiedLayer.visible === true)
+            lineSimplifiedLayer.visible = false;
+        addOnly = false;
+    }
     async function showFlat(){
         setIsFlatting(true);
         isShowing = true;
@@ -976,12 +1122,19 @@ function Panel() {
             return targetScene;
         }
         try{
+            let userName;
+            if (user !== "")
+                userName = user;
+            else
+                userName = "anonymous";
             const { fileName, documentID, base64String, resize } = targetScene;
             const doc = app.documents.filter((d)=>d._id===documentID)[0];
             // get the new size if the doc is resized
             let data;
             if (resize){
                 data = {
+                        fileName,
+                        userName,
                         image: base64String,
                         net: 512,
                         radius: 1,
@@ -991,6 +1144,8 @@ function Panel() {
             }
             else {
                 data = {
+                        fileName,
+                        userName,
                         image: base64String,
                         net: 512,
                         radius: 1,
@@ -1041,6 +1196,7 @@ function Panel() {
                 newBackServer = 'remote';
             else
                 newBackServer = 'local';
+            setBackEnd(newBackServer);
             return await flatSingleBackground(targetScene, failed + 1, newBackServer);
         }
             
@@ -1064,13 +1220,21 @@ function Panel() {
         var scene = scenesGlobal.filter(scene => scene.documentID === app.activeDocument._id)[0]
         try{
             if ((scene.historyIndex + offset) < 1){
+                // document.querySelector("#undoButton").setAttribute("disabled", true);
                 app.showAlert("This is the end of undo list");
                 return null;
             }
+            // else
+            //     if (document.querySelector("#redoButton"))
+            //         document.querySelector("#redoButton").removeAttribute("disabled");
             if ((scene.historyIndex + offset) > scene.image.length - 1){
+                // document.querySelector("#redoButton").setAttribute("disabled", true);
                 app.showAlert("This is the end of redo list");
                 return null;
             }
+            // else
+            //     if (document.querySelector("#undoButton"))
+            //         document.querySelector("#undoButton").removeAttribute("disabled");
 
             // load flatting results
             var line_artist;
@@ -1311,11 +1475,8 @@ function Panel() {
                 }
                 else
                     layerGroup = layerGroupList[0];
+
                 // hide all other layergourps and show the selected one only
-                doc.layers.forEach(l=>{
-                    if (l.selected===true)
-                        l.selected=false;
-                });
                 for (let i=0;i<doc.layerTree.length;i++){
                     if (doc.layerTree[i].name === `Flat ${scene.historyIndex}`){
                         doc.layerTree[i].visible = true;
@@ -1328,8 +1489,14 @@ function Panel() {
                                 l.selected=true;
                         })
                     }
-                    else
+                    else{
                         doc.layerTree[i].visible = false;
+                        if (doc.layerTree[i].isGroupLayer)
+                            doc.layerTree[i].children.forEach(l=>{
+                               l.selected=false;
+                            });
+                    }
+
                 }
 
                 // reorder the layergroup
@@ -1370,6 +1537,11 @@ function Panel() {
         // select the active document
         const scene = scenes.filter(scene => scene.documentID === app.activeDocument._id)[0]
         const { fileName } = scene;
+        let userName;
+            if (user !== "")
+                userName = user;
+            else
+                userName = "anonymous";
         
         // read the user input
         var layerGroup = false;
@@ -1407,9 +1579,11 @@ function Panel() {
 
         // construct the merge input 
         const data = {
-            line_artist: line_artist,
-            fill_neural: fill_neural,
-            fill_artist: fill_artist,
+            fileName,
+            userName,
+            line_artist,
+            fill_neural,
+            fill_artist,
             stroke,
         }
         var url;
@@ -1512,6 +1686,12 @@ function Panel() {
         const doc = app.activeDocument;
         let splitLayer;
         var layerGroup;
+        const { fileName } = scene;
+        let userName;
+            if (user !== "")
+                userName = user;
+            else
+                userName = "anonymous";
         if (fastHistory){
             layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
             splitLayer = await saveFineSplitHintLayer(layerGroup);
@@ -1544,10 +1724,13 @@ function Panel() {
             fill_artist_in = scene.fill_artist[1];
         
         const data = {
+            fileName,
+            userName,
             line_artist: line_artist_in,
             fill_neural: fill_neural_in,
             fill_artist: fill_artist_in,
             stroke,
+            mode: addOnly,
         };
         
         console.log('sending request...');
@@ -1629,6 +1812,10 @@ function Panel() {
                 await doc.layerTree[i].delete();
             }
             await displayScene(0);
+            if (addOnly)
+                setFixMode();
+            else
+                setAddMode();
         }
         else{
             let newLayer1 = await createLinkLayer("result_neural", image);
@@ -1658,8 +1845,6 @@ function Panel() {
             }
             await moveSimplifiedLayerBack(newLayer3);
         }
-            
-        splitLayer.selected = true;
         setScenes(scenesGlobal);
         console.log('scenes saved in React state');
 
@@ -1732,64 +1917,69 @@ function Panel() {
             }}
 
     async function handleFineSplitToolClickFast(brushSize) {
-        const doc = app.activeDocument;
-        const scene = scenesGlobal.filter((s)=>s.documentID===app.activeDocument._id)[0];
-        const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
-        let splitHintLayer = await getLayerByName("split-hint", layerGroup);
-        let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
-        
-        // unselect other layers 
-        doc.layers.forEach((layer)=>{
-                    if (layer.selected === true)
-                        layer.selected = false
-                });
+        if (isFlatting || isInitail){
+            return null;
+        }
+        else{
+            const doc = app.activeDocument;
+            const scene = scenesGlobal.filter((s)=>s.documentID===app.activeDocument._id)[0];
+            const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
+            let splitHintLayer = await getLayerByName("split-hint", layerGroup);
+            let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
+            
+            // unselect other layers 
+            doc.layers.forEach((layer)=>{
+                        if (layer.selected === true)
+                            layer.selected = false
+                    });
 
-        if (splitHintLayer){
-            if (layerGroup.locked)
-                layerGroup.locked = false;
-            if (splitHintLayer.selected===false)
-                splitHintLayer.selected = true;
-            if (splitHintLayer.locked===true)
-                splitHintLayer.locked=false;
-        };
+            if (splitHintLayer){
+                if (layerGroup.locked)
+                    layerGroup.locked = false;
+                if (splitHintLayer.selected===false)
+                    splitHintLayer.selected = true;
+                if (splitHintLayer.locked===true)
+                    splitHintLayer.locked=false;
+            };
 
-        if (layerMergeHint.visible)
-            layerMergeHint.visible = false;
+            if (layerMergeHint.visible)
+                layerMergeHint.visible = false;
 
-        if (photoshop.app.currentTool.id !== "pencilTool")
-            await activatePencil();
-        
-        const batchPlay = photoshop.action.batchPlay;
-        const result = await batchPlay(
-        [
-           {
-              "_obj": "set",
-              "_target": [
-                 {
-                    "_ref": "brush",
-                    "_enum": "ordinal",
-                    "_value": "targetEnum"
-                 }
-              ],
-              "to": {
-                 "_obj": "brush",
-                 "masterDiameter": {
-                    "_unit": "pixelsUnit",
-                    "_value": brushSize
-                 }
-              },
-              "_isCommand": true,
-              "_options": {
-                 "dialogOptions": "dontDisplay"
-              }
-           }
-        ],{
-           "synchronousExecution": false,
-           "modalBehavior": "fail"
-        });
+            if (photoshop.app.currentTool.id !== "pencilTool")
+                await activatePencil();
+            
+            const batchPlay = photoshop.action.batchPlay;
+            const result = await batchPlay(
+            [
+               {
+                  "_obj": "set",
+                  "_target": [
+                     {
+                        "_ref": "brush",
+                        "_enum": "ordinal",
+                        "_value": "targetEnum"
+                     }
+                  ],
+                  "to": {
+                     "_obj": "brush",
+                     "masterDiameter": {
+                        "_unit": "pixelsUnit",
+                        "_value": brushSize
+                     }
+                  },
+                  "_isCommand": true,
+                  "_options": {
+                     "dialogOptions": "dontDisplay"
+                  }
+               }
+            ],{
+               "synchronousExecution": false,
+               "modalBehavior": "fail"
+            });
 
-        // await setColor(color);
-        await setColorYellow();
+            // await setColor(color);
+            await setColorYellow();
+        }
 }
 
     async function handleMergeToolClickFast(brushSize) {
@@ -1922,19 +2112,19 @@ function Panel() {
 
     const ReadyTab = (props)=>{
         return (<>
-                   <sp-action-button label="Undo" onClick={undoFlat}>
+                   <sp-action-button id="undoButton" label="Undo" onClick={undoFlat}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                                <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" />
+                                <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
                                 <path class="a" d="M15.3315,6.271A5.19551,5.19551,0,0,0,11.8355,5H5.5V2.4A.4.4,0,0,0,5.1,2a.39352.39352,0,0,0-.2635.1L1.072,5.8245a.25.25,0,0,0,0,.35L4.834,9.9a.39352.39352,0,0,0,.2635.1.4.4,0,0,0,.4-.4V7h6.441A3.06949,3.06949,0,0,1,15.05,9.9a2.9445,2.9445,0,0,1-2.78274,3.09783Q12.13375,13.005,12,13H8.5a.5.5,0,0,0-.5.5v1a.5.5,0,0,0,.5.5h3.263a5.16751,5.16751,0,0,0,5.213-4.5065A4.97351,4.97351,0,0,0,15.3315,6.271Z" />
                             </svg>
                         </div>
                         
                     </sp-action-button>
-                    <sp-action-button label="Redo" onClick={redoFlat}>
+                    <sp-action-button id="redoButton" label="Redo" onClick={redoFlat}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                                <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" />
+                                <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
                                 <path class="a" d="M2.6685,6.271A5.19551,5.19551,0,0,1,6.1645,5H12.5V2.4a.4.4,0,0,1,.4-.4.39352.39352,0,0,1,.2635.1l3.762,3.7225a.25.25,0,0,1,0,.35L13.166,9.9a.39352.39352,0,0,1-.2635.1.4.4,0,0,1-.4-.4V7H6.0615A3.06949,3.06949,0,0,0,2.95,9.9a2.9445,2.9445,0,0,0,2.78274,3.09783Q5.86626,13.005,6,13H9.5a.5.5,0,0,1,.5.5v1a.5.5,0,0,1-.5.5H6.237a5.16751,5.16751,0,0,1-5.213-4.5065A4.97349,4.97349,0,0,1,2.6685,6.271Z" />
                             </svg>
                         </div>
@@ -1943,17 +2133,17 @@ function Panel() {
                     <sp-action-button label="Flat" onClick={props.action}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                              <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M17.489.1885A17.36351,17.36351,0,0,0,4.793,10.995a.261.261,0,0,0,.0625.2725l1.876,1.8755a.261.261,0,0,0,.2705.0635A17.214,17.214,0,0,0,17.8095.509.272.272,0,0,0,17.489.1885Z" />
+                              <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" /><path class="a" d="M17.489.1885A17.36351,17.36351,0,0,0,4.793,10.995a.261.261,0,0,0,.0625.2725l1.876,1.8755a.261.261,0,0,0,.2705.0635A17.214,17.214,0,0,0,17.8095.509.272.272,0,0,0,17.489.1885Z" />
                               <path d="M3.9,9.574H.45a.262.262,0,0,1-.23-.3915C1.0105,7.8045,3.96,3.26,8.424,3.26,7.388,4.2955,3.981,8.7845,3.9,9.574Z" />
                               <path d="M8.424,14.1v3.454a.262.262,0,0,0,.3895.2305c1.376-.777,5.9245-3.688,5.9245-8.2095C13.7,10.61,9.213,14.017,8.424,14.1Z" />
                             </svg>
                         </div>
                         {props.text}
                     </sp-action-button>
-                    <sp-action-button label="Refresh" onClick={()=>{reorderFlat(app.activeDocument.layers)}}>
+                    <sp-action-button label="Refresh" onClick={reorderFlat}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                              <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" />
+                              <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
                               <path class="a" d="M16.337,10H15.39a.6075.6075,0,0,0-.581.469A5.7235,5.7235,0,0,1,5.25,13.006l-.346-.3465L6.8815,10.682A.392.392,0,0,0,7,10.4a.4.4,0,0,0-.377-.4H1.25a.25.25,0,0,0-.25.25v5.375A.4.4,0,0,0,1.4,16a.3905.3905,0,0,0,.28-.118l1.8085-1.8085.178.1785a8.09048,8.09048,0,0,0,3.642,2.1655,7.715,7.715,0,0,0,9.4379-5.47434q.04733-.178.0861-.35816A.5.5,0,0,0,16.337,10Z" />
                               <path class="a" d="M16.6,2a.3905.3905,0,0,0-.28.118L14.5095,3.9265l-.178-.1765a8.09048,8.09048,0,0,0-3.642-2.1655A7.715,7.715,0,0,0,1.25269,7.06072q-.04677.17612-.08519.35428A.5.5,0,0,0,1.663,8H2.61a.6075.6075,0,0,0,.581-.469A5.7235,5.7235,0,0,1,12.75,4.994l.346.3465L11.1185,7.318A.392.392,0,0,0,11,7.6a.4.4,0,0,0,.377.4H16.75A.25.25,0,0,0,17,7.75V2.377A.4.4,0,0,0,16.6,2Z" />
                             </svg>
@@ -1976,6 +2166,12 @@ function Panel() {
             </div>)
     }
 
+    const handleKeyPress = (event) => {
+      if(event.key === 'Enter'){
+        console.log('enter press here! ')
+      }
+    }
+
     const FlattingTab = (      
         //https://www.reactenlightenment.com/react-jsx/5.1.html
         // JSX allows us to put HTML into JavaScript.
@@ -1993,17 +2189,33 @@ function Panel() {
                     id="mergeSlider"
                     type="range" 
                     min="1" 
-                    max="100"
-                    step="1"
+                    max="20"
+                    step="5"
                     value={brushSize}
                     onMouseUp={handleInputChange}
+                    onKeyPress={handleKeyPress}
                     style={{width:"80%"}}>
                     <sp-label slot="label">Size</sp-label>
                 </sp-slider>
                 <sp-radio-group name="view">
                     <sp-radio value="first" checked onClick={showEditMode}>Edit</sp-radio>
-                    <sp-radio value="second" onClick={showViewMode}>Check Result</sp-radio>
+                    <sp-radio value="third" onClick={showFlatMode}>Check Flat</sp-radio>
+                    <sp-radio value="second" onClick={showViewMode}>Check Colorized</sp-radio>
                 </sp-radio-group> 
+                
+                <sp-detail>Advanced</sp-detail>
+                <div>
+                    {/*<sp-checkbox>Pro Mode</sp-checkbox>*/}
+                    <sp-action-button label="Refresh" onClick={toFlatLayers}>
+                        <div slot="icon" class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                              <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M15,14H6V12H9.8V11H6V9H9.8V8H2V4H15V2.5a.5.5,0,0,0-.5-.5H.5a.5.5,0,0,0-.5.5v13a.5.5,0,0,0,.5.5h14a.5.5,0,0,0,.5-.5ZM5,14H2V9H5Z" />
+                              <path class="a" d="M14,7V5.336a.25.25,0,0,1,.433-.1705L18,9l-3.567,3.8345A.25.25,0,0,1,14,12.664V11H11.5a.5.5,0,0,1-.5-.5v-3a.5.5,0,0,1,.5-.5Z" />
+                            </svg>
+                        </div>
+                        Export Layers
+                    </sp-action-button>
+                </div>    
             </sp-body>
             </div>
             <ActionGroup action={tryMerge} text="Colorize"></ActionGroup>
@@ -2021,7 +2233,25 @@ function Panel() {
                                 height:"150px",
                                 overflowY:"scroll"}}>
                    Should we put some illuastration here?
-
+                <sp-radio-group name="view">
+                    <sp-radio value="first" checked onClick={setAddMode}>Add only</sp-radio>
+                    <sp-radio value="second" onClick={setFixMode}>Add & Fix</sp-radio>
+                    <sp-radio value="third" onClick={showFlatMode}>Check Flat</sp-radio>
+                    <sp-radio value="second" onClick={showViewMode}>Check Colorized</sp-radio>
+                </sp-radio-group> 
+                
+                <sp-detail>Advanced</sp-detail>
+                <sp-radio-group name="view">
+                </sp-radio-group>
+                <sp-action-button label="Refresh" onClick={toFlatLayers}>
+                    <div slot="icon" class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                          <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M15,14H6V12H9.8V11H6V9H9.8V8H2V4H15V2.5a.5.5,0,0,0-.5-.5H.5a.5.5,0,0,0-.5.5v13a.5.5,0,0,0,.5.5h14a.5.5,0,0,0,.5-.5ZM5,14H2V9H5Z" />
+                          <path class="a" d="M14,7V5.336a.25.25,0,0,1,.433-.1705L18,9l-3.567,3.8345A.25.25,0,0,1,14,12.664V11H11.5a.5.5,0,0,1-.5-.5v-3a.5.5,0,0,1,.5-.5Z" />
+                        </svg>
+                    </div>
+                    Export Layers
+                </sp-action-button>
                 </sp-body>
             </div> 
             <ActionGroup action={trySplitFine} text="Tweak"></ActionGroup>
@@ -2029,14 +2259,42 @@ function Panel() {
     )
 
     // We need a new tab to edit palette
+
+    function recordUserName(){
+         setUser(document.querySelector("#userName").value);
+
+    };
+
+    const onChangeBackend = (event)=>{
+        setBackEnd(event.target.value);
+    };
+
+
     const PaletteTab = (
     <div style={{display: "block", height:"130vh",  overflowY: "scroll"}}>
-        <div class="group"><sp-label>Choosing backend</sp-label>
-                <sp-radio-group selected={backEnd} name="backend">
-                    <sp-radio value="local" checked onClick={()=>setBackEnd("local")}>Local</sp-radio>
-                    <sp-radio value="remote"  onClick={()=>setBackEnd("remote")}>Remote</sp-radio>
-                </sp-radio-group>
+        <div class="group"><sp-label>Log</sp-label>
+            <TextField id="userName" label="Please enter user name" onChange={recordUserName} value={user}></TextField>
         </div>
+
+        <div class="group"><sp-label>Advanced</sp-label>
+            <sp-detail>Please to click on the text (NOT the radio) to change</sp-detail>
+            <FormControl component="fieldset">
+                <RadioGroup row onChange={onChangeBackend} value={backEnd}>
+                <FormControlLabel value="local" control={<Radio color="primary"/>} label="local" />
+                <FormControlLabel value="remote" control={<Radio color="primary"/>} label="remote" />
+                </RadioGroup>
+            </FormControl>
+
+            <Grid container justify="flex-start"> 
+                <Grid item xs={4}>
+                    <ImportPaletteButton/>
+                </Grid>
+                <Grid item xs={4}>
+                    <ExportPaletteButton/>
+                </Grid>
+            </Grid>
+        </div>
+        
 
        {/* <div class="group" ><sp-label>Select color</sp-label>
             <sp-body size="XS" >
@@ -2091,19 +2349,6 @@ function Panel() {
                 </Grid>
             </sp-body>
         </div>*/}
-
-        <div class="group" ><sp-label>Edit Palette</sp-label>
-            <sp-body size="XS" >
-                <Grid container justify="flex-start"> 
-                    <Grid item xs={4}>
-                        <ImportPaletteButton/>
-                    </Grid>
-                    <Grid item xs={4}>
-                        <ExportPaletteButton/>
-                    </Grid>
-                </Grid>
-            </sp-body>
-        </div>
         
     </div>
     )
@@ -2126,7 +2371,7 @@ function Panel() {
                 <sp-action-button id="addFlatButton" onClick={loadNewScenes}>
                     <div slot="icon" class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                          <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" />
+                          <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
                           <path class="a" d="M9,1a8,8,0,1,0,8,8A8,8,0,0,0,9,1Zm5,8.5a.5.5,0,0,1-.5.5H10v3.5a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5V10H4.5A.5.5,0,0,1,4,9.5v-1A.5.5,0,0,1,4.5,8H8V4.5A.5.5,0,0,1,8.5,4h1a.5.5,0,0,1,.5.5V8h3.5a.5.5,0,0,1,.5.5Z" />
                         </svg>
                     </div>
@@ -2157,7 +2402,7 @@ function Panel() {
 const FlatIcon = ()=>{
     return (
         <SvgIcon xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-          <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" />
+          <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
           <path class="a" d="M9,1a8,8,0,1,0,8,8A8,8,0,0,0,9,1Zm5,8.5a.5.5,0,0,1-.5.5H10v3.5a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5V10H4.5A.5.5,0,0,1,4,9.5v-1A.5.5,0,0,1,4.5,8H8V4.5A.5.5,0,0,1,8.5,4h1a.5.5,0,0,1,.5.5V8h3.5a.5.5,0,0,1,.5.5Z" />
         </SvgIcon>)
 }
