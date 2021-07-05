@@ -49,7 +49,8 @@ import {
     activatePencil,
     setBrushSize,
     ensurePersistentToken,
-    setColorYellow
+    setColorYellow,
+    setPersistentFolder
 } from '../functions';
 
 import { Modal } from 'antd'; // why import this line? it is not used anywhere
@@ -359,6 +360,7 @@ function Panel() {
                 handleFineSplitToolClickFast(3);
             else
                 handleFineSplitToolClick(3);
+            setAddMode();
         }
         else if (newValue===0){
             document.querySelector("#addFlatButton").disabled = false;
@@ -490,6 +492,17 @@ function Panel() {
         else{
             handleMergeToolClick(mergeSize);
         }
+    };
+
+    async function reInitialize(){
+        // clear all local stroage settings
+        localStorage.clear();
+        // 
+        if (setPersistentFolder())
+            app.showAlert("plugin re-initialize successed");
+        else
+            app.showAlert("plugin re-initialize falied, please try close Photoshop and start to initailize all over again");
+           
     };
 
     async function toFlatLayers(){
@@ -944,9 +957,24 @@ function Panel() {
             end = layers.length;
         }
         
-        let lineSimplifiedLayer = await getLayerByName("line_simplified", layers);
-        if (lineSimplifiedLayer.visible === false)
-            lineSimplifiedLayer.visible = true;
+        let splitHintLayer = await getLayerByName("split-hint", layers);
+        layers.forEach((l)=>{
+            if (l.name === "merge-hint" && l.visible === true){
+                l.visible = false;
+            }
+            else{
+                if (l.visible===false)
+                    l.visible = true;
+                if (l.selected===true)
+                    l.selected = false;
+            }
+        })
+        if (splitHintLayer.selected===false){
+            splitHintLayer.selected=true;
+        }
+        if (splitHintLayer.visible===false){
+            splitHintLayer.visible=true;
+        } 
         addOnly = true;
     }
 
@@ -964,9 +992,27 @@ function Panel() {
             end = layers.length;
         }
 
-        let lineSimplifiedLayer = await getLayerByName("line_simplified", layers);
-        if (lineSimplifiedLayer.visible === true)
-            lineSimplifiedLayer.visible = false;
+        let splitHintLayer = await getLayerByName("split-hint", layers);
+        layers.forEach((l)=>{
+            if (l.name === "merge-hint" && l.visible === true){
+                l.visible = false;
+            }
+            else if (l.name === "line_simplified")
+                l.visible=false;
+            else{
+                if (l.visible===false)
+                    l.visible = true;
+                if (l.selected===true)
+                    l.selected = false;
+            }
+        })
+        if (splitHintLayer.selected===false){
+            splitHintLayer.selected=true;
+        }
+        if (splitHintLayer.visible===false){
+            splitHintLayer.visible=true;
+        } 
+        
         addOnly = false;
     }
     async function showFlat(){
@@ -2243,7 +2289,7 @@ function Panel() {
                 <sp-detail>Advanced</sp-detail>
                 <sp-radio-group name="view">
                 </sp-radio-group>
-                <sp-action-button label="Refresh" onClick={toFlatLayers}>
+                <sp-action-button label="Refresh" onClick={toFlatLayers} style={{position: "relative", "zIndex": 99}}>
                     <div slot="icon" class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
                           <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M15,14H6V12H9.8V11H6V9H9.8V8H2V4H15V2.5a.5.5,0,0,0-.5-.5H.5a.5.5,0,0,0-.5.5v13a.5.5,0,0,0,.5.5h14a.5.5,0,0,0,.5-.5ZM5,14H2V9H5Z" />
@@ -2271,7 +2317,11 @@ function Panel() {
 
 
     const PaletteTab = (
-    <div style={{display: "block", height:"130vh",  overflowY: "scroll"}}>
+    <div style={{
+        display: "block",
+        height:"290",
+        overflowY:"scroll",
+        overflowX: "hidden"}}>
         <div class="group"><sp-label>Log</sp-label>
             <TextField id="userName" label="Please enter user name" onChange={recordUserName} value={user}></TextField>
         </div>
@@ -2285,14 +2335,35 @@ function Panel() {
                 </RadioGroup>
             </FormControl>
 
-            <Grid container justify="flex-start"> 
-                <Grid item xs={4}>
-                    <ImportPaletteButton/>
-                </Grid>
-                <Grid item xs={4}>
-                    <ExportPaletteButton/>
-                </Grid>
-            </Grid>
+            <sp-action-button label="loadPalette" onClick={readPalette}>
+                <div slot="icon" class="icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                      <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M16.5,1H5.5a.5.5,0,0,0-.5.5v3a.5.5,0,0,0,.5.5h1A.5.5,0,0,0,7,4.5V3h8V15H7V13.5a.5.5,0,0,0-.5-.5h-1a.5.5,0,0,0-.5.5v3a.5.5,0,0,0,.5.5h11a.5.5,0,0,0,.5-.5V1.5A.5.5,0,0,0,16.5,1Z" />
+                      <path class="a" d="M8,12.6a.4.4,0,0,0,.4.4.39352.39352,0,0,0,.2635-.1l3.762-3.7225a.25.25,0,0,0,0-.35L8.666,5.1A.39352.39352,0,0,0,8.4025,5a.4.4,0,0,0-.4.4V8H1.5a.5.5,0,0,0-.5.5v1a.5.5,0,0,0,.5.5H8Z" />
+                    </svg>
+                </div>
+                Import Palette
+            </sp-action-button>
+            <sp-action-button label="exportPalette" onClick={savePalette}>
+                <div slot="icon" class="icon">                  
+                    <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                      <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M12.5,13h-1a.5.5,0,0,0-.5.5V15H3V3h8V4.5a.5.5,0,0,0,.5.5h1a.5.5,0,0,0,.5-.5v-3a.5.5,0,0,0-.5-.5H1.5a.5.5,0,0,0-.5.5v15a.5.5,0,0,0,.5.5h11a.5.5,0,0,0,.5-.5v-3A.5.5,0,0,0,12.5,13Z" />
+                      <path class="a" d="M17.9255,8.8275,14.666,5.1a.39352.39352,0,0,0-.2635-.1.4.4,0,0,0-.4.4V8H8.5a.5.5,0,0,0-.5.5v1a.5.5,0,0,0,.5.5H14v2.6a.4.4,0,0,0,.4.4.39352.39352,0,0,0,.2635-.1l3.262-3.7225A.25.25,0,0,0,17.9255,8.8275Z" />
+                    </svg>
+                </div>
+                Export Palette
+            </sp-action-button>
+            <sp-action-button label="reInitialize" onClick={reInitialize}>
+                <div slot="icon" class="icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="18" id="ImportedIcons" viewBox="0 0 18 18" width="18">
+                      <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="fill" d="M8.4325,6.94446q-.09531-.3045-.19257-.60907-.0954-.30461-.17651-.58777c-.05311-.18878-.10053-.36151-.14417-.518H7.90881a8.737,8.737,0,0,1-.22393.8548c-.09961.32068-.20209.648-.30457.98291q-.15508.50244-.30548.92981H8.76361c-.04266-.14233-.092-.30267-.1499-.481C8.55682,7.3382,8.497,7.14752,8.4325,6.94446Z" />
+                      <path class="fill" d="M7.5,13.5A5.97458,5.97458,0,0,1,9.1647,9.35928l-.00546-.01584H6.69061l-.502,1.56073A.12689.12689,0,0,1,6.05963,11H4.81012c-.07117,0-.09674-.03894-.075-.11768L6.87183,4.72675c.02179-.0636.04364-.13666.06451-.21918A2.20488,2.20488,0,0,0,6.979,4.075.06675.06675,0,0,1,7.054,4H8.75317q.07545,0,.08539.05408l1.53629,4.33117A5.95477,5.95477,0,0,1,16,8.05075V3.4A3.4,3.4,0,0,0,12.6,0H3.4A3.4,3.4,0,0,0,0,3.4v9.2A3.4,3.4,0,0,0,3.4,16H8.05075A5.96725,5.96725,0,0,1,7.5,13.5Z" />
+                      <path class="fill" d="M9.19635,12.24893A4.4413,4.4413,0,0,1,16.948,10.699l.62524-.62524A.24428.24428,0,0,1,17.74805,10a.25035.25035,0,0,1,.252.25048V12.75a.25.25,0,0,1-.25.25H15.25049A.25087.25087,0,0,1,15,12.74823a.24439.24439,0,0,1,.07373-.175l.86987-.86987a3.02825,3.02825,0,0,0-5.29845.7181.48838.48838,0,0,1-.46082.30979H9.55908A.37852.37852,0,0,1,9.19635,12.24893Z" />
+                      <path class="fill" d="M17.80365,14.75125a4.44129,4.44129,0,0,1-7.75165,1.55l-.62524.62524a.24428.24428,0,0,1-.17481.07373A.25035.25035,0,0,1,9,16.74969V14.25A.25.25,0,0,1,9.25,14h2.4995A.251.251,0,0,1,12,14.252a.24435.24435,0,0,1-.07373.175l-.86987.86987a3.02825,3.02825,0,0,0,5.29845-.71809.48837.48837,0,0,1,.46082-.3098h.62525A.37852.37852,0,0,1,17.80365,14.75125Z" />
+                    </svg>
+                </div>
+                Re-Initialize
+            </sp-action-button>  
         </div>
         
 
@@ -2368,7 +2439,7 @@ function Panel() {
                         setflatClicked={setflatClicked}
                         isShowing={isShowing}
                         showFlat={showFlat}/>
-                <sp-action-button id="addFlatButton" onClick={loadNewScenes}>
+                <sp-action-button id="addFlatButton" onClick={loadNewScenes} style={{position: "relative", "zIndex": 99}}>
                     <div slot="icon" class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
                           <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
@@ -2398,14 +2469,6 @@ function Panel() {
     );
 }
 
-// Icon for tab is not work
-const FlatIcon = ()=>{
-    return (
-        <SvgIcon xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-          <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
-          <path class="a" d="M9,1a8,8,0,1,0,8,8A8,8,0,0,0,9,1Zm5,8.5a.5.5,0,0,1-.5.5H10v3.5a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5V10H4.5A.5.5,0,0,1,4,9.5v-1A.5.5,0,0,1,4.5,8H8V4.5A.5.5,0,0,1,8.5,4h1a.5.5,0,0,1,.5.5V8h3.5a.5.5,0,0,1,.5.5Z" />
-        </SvgIcon>)
-}
 export default function ThemedPanel() {
     return (
         <ThemeProvider theme={theme}>

@@ -874,17 +874,17 @@ async function confirmContinue() {
 };
 
 // find the temp folder token
-async function setPersistentFolder() {
+export async function setPersistentFolder() {
     // let's get the default temp folder, we don't need those intermediate files
     let platform = os.platform()
     let tempPath;
     let answer;
     if (platform === "darwin"){
         tempPath = "/tmp/";
-        navigator.clipboard.writeText({"text/plain": tempPath});
+        // navigator.clipboard.writeText({"text/plain": tempPath});
         answer = await confirm(
           "Please indicate the temporary folder path", //[1]
-          "Use 'shift + command + g' and paste the temp folder path in the next open file dailog, then click 'open'.",
+           "Set the temp folder path to \" /tmp/ \".",
           ["Cancel", "Continue"]);
         // app.showAlert("Please indicate the temporary folder path, using 'shift + command + g' and paste the temp folder path in the open file dailog, then click 'open'.");
         if (answer.which === 0){
