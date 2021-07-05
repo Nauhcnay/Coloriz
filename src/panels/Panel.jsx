@@ -1613,14 +1613,17 @@ function Panel() {
             // we could save some loading time
             line_artist = scene.line_artist[scene.historyIndex]
         }
-        else
-            line_artist = scene.line_artist[1];    
+        else{
+            line_artist = scene.line_artist.filter(x=>x!==null).slice(-1)[0];
+            // line_artist = scene.line_artist[1];    
+        }
         if (scene.fill_artist[scene.historyIndex] !== null && (scene.historyIndex) !== 1){
 
             fill_artist = scene.fill_artist[scene.historyIndex];
         }
         else
-            fill_artist = scene.fill_artist[1];
+            fill_artist = scene.fill_artist.filter(x=>x!==null).slice(-1)[0];
+            // fill_artist = scene.fill_artist[1];
         
 
         // construct the merge input 
