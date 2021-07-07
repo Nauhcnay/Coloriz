@@ -339,6 +339,7 @@ var isFlattingGlobal = false;
 var isShowing = false;
 var mergeSize = 10;
 var addOnly=true;
+var fireFlat = false;
 // this option enables fast redo and undo in trade of much more layer spaces required in photoshop
 // it will store 6*n layers for each document (n is number of the colorize and tweak times)
 // disable this option will only maintain 6 layers for each document
@@ -405,8 +406,9 @@ function Panel() {
     useEffect(() => {
         ensurePersistentToken();
         // check if all scene have been flatted
-        if (isFlattingGlobal === false && flattingSubmission > 0) {
+        if (isFlattingGlobal === false && flattingSubmission > 0 || fireFlat) {
             tryFlat();
+            fireFlat=false;
         }
         if (scenes.length === 0)
             flattingSubmission = 0;
@@ -1062,7 +1064,7 @@ function Panel() {
         // get all docs
         const docs = photoshop.app.documents;
         // we need to make a deep copy
-        let updatedScenes = JSON.parse(JSON.stringify(scenes))
+        // let scenesGlobal = JSON.parse(JSON.stringify(scenesGlobal))
         setIsFlatting(true);
         let haveNewSceneFlatted = false;
         isFlattingGlobal = true;
@@ -1071,20 +1073,22 @@ function Panel() {
         // flat all images in the opened scenes
         // setFlatting(true);
         var i;
-        var end = updatedScenes.length;
+        var end = scenesGlobal.length;
         let w_new;
         let h_new;
         for (i = 0; i < end; i++){
-            console.log('Flatting image: ' + updatedScenes[i].fileName);
             try{
-                if (updatedScenes[i].flatted === false){
+                if (scenesGlobal[i].flatted === false && scenesGlobal[i].queued === true && 
+                    scenesGlobal[i].working === false){
+                    scenesGlobal[i].working = true;
+                    console.log('Flatting image: ' + scenesGlobal[i].fileName);
                     haveNewSceneFlatted = true;
                     // resize the doc if necessary
-                    let doc = docs.filter(d=>d._id === updatedScenes[i].documentID)[0];
-                    if (updatedScenes[i].resize){
+                    let doc = docs.filter(d=>d._id === scenesGlobal[i].documentID)[0];
+                    if (scenesGlobal[i].resize){
                         // get the new size of the doc
-                        w_new = updatedScenes[i].newSize[0];
-                        h_new = updatedScenes[i].newSize[1];
+                        w_new = scenesGlobal[i].newSize[0];
+                        h_new = scenesGlobal[i].newSize[1];
                         // save to new file and resize
                         const resizeFolderToken = await localStorage.getItem("resizeFolder");
                         const resizeFolder = await fs.getEntryForPersistentToken(resizeFolderToken);
@@ -1095,7 +1099,7 @@ function Panel() {
                         doc.resizeImage(w_new, h_new);
                         console.log("resize file successed");
                     } 
-                    const updatedScene = await flatSingleBackground(updatedScenes[i]);    
+                    const updatedScene = await flatSingleBackground(scenesGlobal[i]);    
                     // here we need to merge to scene list, cause the scene could be updated
                     // by other place during the flatting
                     scenesGlobal = scenesGlobal.map((s)=>{
@@ -1103,12 +1107,19 @@ function Panel() {
                             return updatedScene;
                         else
                             return s;
-                    })
-                    if (i >= end - 1)
+                    });
+                    if (i >= end - 1){
                         isFlattingGlobal = false;
+                        // put all waiting images into process queue
+                        scenesGlobal.forEach((s)=>{
+                            if (s.queued === false)
+                                s.queued = true;
+                        })
+
+                    }
 
                     setScenes(scenesGlobal);
-                    if (app.activeDocument._id === updatedScenes[i].documentID){
+                    if (app.activeDocument._id === scenesGlobal[i].documentID){
                         setIsFlatting(false);
                     }
                 }
@@ -1231,7 +1242,8 @@ function Panel() {
             // these two layers also need to be added into the undo list
             targetScene["merge_hint"] = [null, null];
             targetScene["split_hint"] = [null, null];
-            targetScene["historyIndex"]++;      
+            targetScene["historyIndex"]++;     
+            targetScene["working"] = false; 
             
             return targetScene;
         }
@@ -1900,7 +1912,12 @@ function Panel() {
     }
 
     async function loadNewScenes() {
-        const newScenes = await readFiles();
+        const unqueued = scenesGlobal.filter((s)=>s.queued === false);
+        const unflatted = scenesGlobal.filter((s)=>s.flatted === false);
+        if (unqueued.length === 0 && unflatted.length === 0)
+            fireFlat = true;
+        var newScenes = await readFiles(fireFlat);
+        fireFlat = false;
         if (newScenes.length===0)
             return null;
         if (flattingSubmission < 0){

@@ -762,7 +762,7 @@ async function showConfirm(doc, w_new, h_new, th) {
 }
 
 // Open files and read their id, filename, and base64 string
-export async function readFiles() {
+export async function readFiles(fireFlat) {
     // this is to avoid two open dialog pop out on windows
     if (isReading){
         return [];
@@ -835,18 +835,39 @@ export async function readFiles() {
             const documentID = doc._id;
             const fileName = doc.title;
             // save result to newSecne
-            return {
-                documentID,
-                fileName,
-                base64String,
-                image: [base64String],
-                flatted: false,
-                displayed: false,
-                resize,
-                "newSize":[w_new, h_new],
-                clicked:false,
-                historyIndex: 0,
-            }    
+            if (fireFlat){
+                return {
+                    documentID,
+                    fileName,
+                    base64String,
+                    image: [base64String],
+                    flatted: false,
+                    queued:true,
+                    displayed: false,
+                    working:false,
+                    resize,
+                    "newSize":[w_new, h_new],
+                    clicked:false,
+                    historyIndex: 0,
+                }    
+            }
+            else{
+                return {
+                    documentID,
+                    fileName,
+                    base64String,
+                    image: [base64String],
+                    flatted: false,
+                    queued:false,
+                    displayed: false,
+                    working:false,
+                    resize,
+                    "newSize":[w_new, h_new],
+                    clicked:false,
+                    historyIndex: 0,
+                }    
+            }
+                
         }))
 
         isReading = false;
