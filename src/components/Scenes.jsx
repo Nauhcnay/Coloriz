@@ -31,8 +31,9 @@ function constrain(str,n){
 
 const useStyles = makeStyles((theme) => ({
   root: {
-    // width: '100%',
-    // maxWidth: 360,
+    paddingTop: "25px",
+    width: '100%',
+    maxWidth: 350,
     // backgroundColor: theme.palette.background.paper,
   },
   activeDoc: {
@@ -169,8 +170,10 @@ export default function Scenes({ scenes, activeScene, setActiveScene, setIsFlatt
         <List component="nav" 
               className={classes.root} 
               aria-label="mailbox folders"
-              style={{height:"300px",
-                    overflowY:"scroll"}}>
+              style={{
+                        height:"100%",
+                        width:"185px",
+                        overflowY:"scroll"}}>
             {scenes.map((scene) => <Scene activeScene={activeScene}
                                         setActiveScene={setActiveScene}
                                         key={scene.documentID}

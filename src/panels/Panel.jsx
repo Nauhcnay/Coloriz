@@ -232,8 +232,8 @@ const BluewRadio = withStyles({
 
 const TabDIV = {
       display: "block",
-      height:"350px",
-      width:"250px",
+      height:"100%",
+      width:"95%",
       overflowY: "hidden"};
 
 const ButtonStyleSmall = {
@@ -2221,19 +2221,19 @@ function Panel() {
     const ActionGroup = (props)=>{
         return(
             <div class="group" 
-                     style={{    
+                     style={{
                         display: "block",
-                        height:"30%"}}>
-                    <sp-body>
+                        height:"60px"}}>
+                    <sp-body
+                        style={{
+                            margin: 0,
+                            position: "absolute",
+                            top: "50%",
+                            msTransform: "translateY(-50%)",
+                            transform: "translateY(-50%)"}}>
                         {isInitail? <InitailTab/> : (isFlatting ? <WorkingTab/> : <ReadyTab action={props.action} text={props.text}/>)}
                     </sp-body>
             </div>)
-    }
-
-    const handleKeyPress = (event) => {
-      if(event.key === 'Enter'){
-        console.log('enter press here! ')
-      }
     }
 
     const FlattingTab = (      
@@ -2244,10 +2244,11 @@ function Panel() {
             <div class="group">
             <sp-label>Palette</sp-label>
             <sp-body size="XS" 
-                    style={{    display: "block",
-                                height:"70%",
-                                overflowY:"scroll",
-                                overflowX: "hidden"}}>
+                    style={{ 
+                        display: "block",
+                        height:"200px",
+                        overflowY:"scroll",
+                        overflowX: "hidden"}}>
                 {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
                 <sp-slider
                     id="mergeSlider"
@@ -2256,9 +2257,7 @@ function Panel() {
                     max="20"
                     step="5"
                     value={brushSize}
-                    onMouseUp={handleInputChange}
-                    onKeyPress={handleKeyPress}
-                    style={{width:"80%"}}>
+                    onMouseUp={handleInputChange}>
                     <sp-label slot="label">Size</sp-label>
                 </sp-slider>
                 <sp-radio-group name="view">
@@ -2292,7 +2291,7 @@ function Panel() {
                 <sp-body size="XS"
                          style={{    
                                 display: "block",
-                                height:"70%",
+                                height:"200px",
                                 overflowY:"scroll"}}>
                 <img
                     width="100%"
@@ -2333,11 +2332,7 @@ function Panel() {
 
 
     const PaletteTab = (
-    <div style={{
-        display: "block",
-        height:"100%",
-        overflowY:"scroll",
-        overflowX: "hidden"}}>
+    <div style={TabDIV}>
         <div class="group"><sp-label>Log</sp-label>
             <TextField id="userName" label="Please enter user name" onChange={recordUserName} value={user}></TextField>
         </div>
@@ -2442,10 +2437,18 @@ function Panel() {
     return (
         <Grid container className={classes.root} style={{
                 position: "relative", 
-                height:"100%",
                 overflowY: "hidden"}}>
             
-            <Grid item xs={5} className={classes.scenes}>
+            <Grid item xs={5} className={classes.scenes} style={{width:"35%"}}>
+                <sp-action-button id="addFlatButton" onClick={loadNewScenes} style={{position: "absolute", "zIndex": 99, top:5}}>
+                    <div slot="icon" class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                          <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
+                          <path class="a" d="M9,1a8,8,0,1,0,8,8A8,8,0,0,0,9,1Zm5,8.5a.5.5,0,0,1-.5.5H10v3.5a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5V10H4.5A.5.5,0,0,1,4,9.5v-1A.5.5,0,0,1,4.5,8H8V4.5A.5.5,0,0,1,8.5,4h1a.5.5,0,0,1,.5.5V8h3.5a.5.5,0,0,1,.5.5Z" />
+                        </svg>
+                    </div>
+                    Add
+                </sp-action-button>
                 <Scenes scenes={scenes}
                         activeScene={activeScene}
                         setActiveScene={setActiveScene}
@@ -2457,19 +2460,11 @@ function Panel() {
                         setflatClicked={setflatClicked}
                         isShowing={isShowing}
                         showFlat={showFlat}/>
-                <sp-action-button id="addFlatButton" onClick={loadNewScenes} style={{position: "absolute", "zIndex": 99, bottom:0}}>
-                    <div slot="icon" class="icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                          <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
-                          <path class="a" d="M9,1a8,8,0,1,0,8,8A8,8,0,0,0,9,1Zm5,8.5a.5.5,0,0,1-.5.5H10v3.5a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5V10H4.5A.5.5,0,0,1,4,9.5v-1A.5.5,0,0,1,4.5,8H8V4.5A.5.5,0,0,1,8.5,4h1a.5.5,0,0,1,.5.5V8h3.5a.5.5,0,0,1,.5.5Z" />
-                        </svg>
-                    </div>
-                    Add
-                </sp-action-button>
+                
             </Grid>
 
             {/*<Grid item container xs={6} style={{ padding: 10 }}>*/}
-            <Grid item container xs={7}>
+            <Grid item container xs={7} style={{width: "65%"}}>
                 <Grid>
                     <StyledTabs
                         value={tab}
