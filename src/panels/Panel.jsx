@@ -6,8 +6,7 @@ const fs = uxp.storage.localFileSystem;
 const st = uxp.storage;
 
 // load resource
-import mergeInstruction from '../assets/merge-instruction.png'
-import splitInstruction from '../assets/split-instruction.png'
+import splitInstruction from '../assets/tweak_example.png'
 // import colorIcon from '../assets/color.svg'
 // import tuningIcon from '../assets/tuning.svg'
 
@@ -2224,8 +2223,7 @@ function Panel() {
             <div class="group" 
                      style={{    
                         display: "block",
-                        height:"75px"}}>
-                    <sp-label>Actions</sp-label>
+                        height:"30%"}}>
                     <sp-body>
                         {isInitail? <InitailTab/> : (isFlatting ? <WorkingTab/> : <ReadyTab action={props.action} text={props.text}/>)}
                     </sp-body>
@@ -2247,7 +2245,7 @@ function Panel() {
             <sp-label>Palette</sp-label>
             <sp-body size="XS" 
                     style={{    display: "block",
-                                height:"150px",
+                                height:"70%",
                                 overflowY:"scroll",
                                 overflowX: "hidden"}}>
                 {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
@@ -2265,11 +2263,9 @@ function Panel() {
                 </sp-slider>
                 <sp-radio-group name="view">
                     <sp-radio value="first" checked onClick={showEditMode}>Edit</sp-radio>
-                    <sp-radio value="third" onClick={showFlatMode}>Check Flat</sp-radio>
-                    <sp-radio value="second" onClick={showViewMode}>Check Colorized</sp-radio>
+                    <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
                 </sp-radio-group> 
-                
-                <sp-detail>Advanced</sp-detail>
+
                 <div>
                     {/*<sp-checkbox>Pro Mode</sp-checkbox>*/}
                     <sp-action-button label="Refresh" onClick={toFlatLayers}>
@@ -2296,17 +2292,17 @@ function Panel() {
                 <sp-body size="XS"
                          style={{    
                                 display: "block",
-                                height:"150px",
+                                height:"70%",
                                 overflowY:"scroll"}}>
-                   Should we put some illuastration here?
+                <img
+                    width="100%"
+                    src={splitInstruction}
+                />
                 <sp-radio-group name="view">
-                    <sp-radio value="first" checked onClick={setAddMode}>Add only</sp-radio>
-                    <sp-radio value="second" onClick={setFixMode}>Add & Fix</sp-radio>
-                    <sp-radio value="third" onClick={showFlatMode}>Check Flat</sp-radio>
-                    <sp-radio value="second" onClick={showViewMode}>Check Colorized</sp-radio>
+                    <sp-radio value="first" checked onClick={setAddMode}>Edit</sp-radio>
+                    <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
                 </sp-radio-group> 
-                
-                <sp-detail>Advanced</sp-detail>
+
                 <sp-radio-group name="view">
                 </sp-radio-group>
                 <sp-action-button label="Refresh" onClick={toFlatLayers} style={{position: "relative", "zIndex": 99}}>
@@ -2339,7 +2335,7 @@ function Panel() {
     const PaletteTab = (
     <div style={{
         display: "block",
-        height:"290",
+        height:"100%",
         overflowY:"scroll",
         overflowX: "hidden"}}>
         <div class="group"><sp-label>Log</sp-label>
@@ -2347,7 +2343,6 @@ function Panel() {
         </div>
 
         <div class="group"><sp-label>Advanced</sp-label>
-            <sp-detail>Please to click on the text (NOT the radio) to change</sp-detail>
             <FormControl component="fieldset">
                 <RadioGroup row onChange={onChangeBackend} value={backEnd}>
                 <FormControlLabel value="local" control={<Radio color="primary"/>} label="local" />
@@ -2445,7 +2440,10 @@ function Panel() {
     )
     // the code that construct the panel
     return (
-        <Grid container className={classes.root} style={{overflowY: "hidden"}}>
+        <Grid container className={classes.root} style={{
+                position: "relative", 
+                height:"100%",
+                overflowY: "hidden"}}>
             
             <Grid item xs={5} className={classes.scenes}>
                 <Scenes scenes={scenes}
@@ -2459,7 +2457,7 @@ function Panel() {
                         setflatClicked={setflatClicked}
                         isShowing={isShowing}
                         showFlat={showFlat}/>
-                <sp-action-button id="addFlatButton" onClick={loadNewScenes} style={{position: "relative", "zIndex": 99}}>
+                <sp-action-button id="addFlatButton" onClick={loadNewScenes} style={{position: "absolute", "zIndex": 99, bottom:0}}>
                     <div slot="icon" class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
                           <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
