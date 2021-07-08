@@ -52,7 +52,7 @@ export async function handleMergeToolClick(brushSize) {
                         "_target": [
                             {
                                 "_ref": "layer",
-                                "_name": "merge-hint"
+                                "_name": "color-hint"
                             }
                         ],
                         "makeVisible": false,
@@ -101,7 +101,7 @@ export async function handleFineSplitToolClick(brushSize) {
                         "_target": [
                             {
                                 "_ref": "layer",
-                                "_name": "split-hint"
+                                "_name": "tweak-hint"
                             }
                         ],
                         "makeVisible": false,
@@ -144,7 +144,7 @@ export async function handleCoarseSplitToolClick(brushSize) {
                     "_target": [
                         {
                             "_ref": "layer",
-                            "_name": "split-hint"
+                            "_name": "tweak-hint"
                         }
                     ],
                     "makeVisible": false,
@@ -455,7 +455,7 @@ export async function selectLayerByName(layerName){
 }
 
 export async function moveSplitHintToTop(){
-    const layer = getLayerByName('split-hint');
+    const layer = getLayerByName('tweak-hint');
     console.log("Move split hint layer to top")
     await moveLayerToTop(layer)
 }
@@ -680,19 +680,19 @@ export async function setRGBMode(){
  * Helpers for merge / split hint layers
  */
 async function hideMergeHintLayer() {
-    await hideLayer('merge-hint')
+    await hideLayer('color-hint')
 }
 
 async function hideSplitHintLayer() {
-    await hiderLayer('split-hint')
+    await hiderLayer('tweak-hint')
 }
 
 async function showMergeHintLayer() {
-   await showLayer('merge-hint')
+   await showLayer('color-hint')
 }
 
 async function showSplitHintLayer() {
-    await showLayer('split-hint')
+    await showLayer('tweak-hint')
 }
 
 function getResultLayer() {
@@ -700,19 +700,19 @@ function getResultLayer() {
 }
 
 function getMergeHintLayer() {
-    return getLayerByName('merge-hint');
+    return getLayerByName('color-hint');
 }
 
 function getSplitHintLayer() {
-    return getLayerByName('split-hint');
+    return getLayerByName('tweak-hint');
 }
 
 async function createMergeHintLayer() {
-    return await createLayer('merge-hint');
+    return await createLayer('color-hint');
 }
 
 async function createSplitHintLayer() {
-    return await createLayer('split-hint');
+    return await createLayer('tweak-hint');
 }
 
 
@@ -821,7 +821,18 @@ export async function readFiles(fireFlat) {
                     h_new = r*th;
                 }
                 // pop out a dialog to ask user to decide
-                resize = await showConfirm(doc, w_new, h_new, th); 
+                resize = await showConfirm(doc, w_new, h_new, th);
+                if (resize){
+                        // save to new file and resize
+                        const resizeFolderToken = await localStorage.getItem("resizeFolder");
+                        const resizeFolder = await fs.getEntryForPersistentToken(resizeFolderToken);
+                        const FileNameBP = doc.title.lastIndexOf(".");
+                        const saveFileName = doc.title.substr(0, FileNameBP) + "_resized.psd";
+                        const file = await resizeFolder.createFile(saveFileName, {overwrite: true});
+                        doc.save(file);
+                        doc.resizeImage(w_new, h_new);
+                        console.log("resize file successed");
+                    } 
             }
             // 
             await sleep(300);
@@ -1085,16 +1096,16 @@ async function saveVisibleLayer(fileName) {
 
 // Save the merge hint layer and clear current input in it
 export async function saveMergeHintLayer(layerGroup=app.activeDocument.layers) {
-    if (await saveLayerByName('merge-hint', 'merge-hint.png', layerGroup)){
+    if (await saveLayerByName('color-hint', 'color-hint.png', layerGroup)){
         // clear the content in this layer
         // but if it is in a group, then we don't need to cleanup
         let layer;
         if (layerGroup.isGroupLayer === undefined){
-            layer = await cleanLayerbyName('merge-hint');
+            layer = await cleanLayerbyName('color-hint');
             return layer;
         }
         else{
-            layer = await getLayerByName('merge-hint', layerGroup);
+            layer = await getLayerByName('color-hint', layerGroup);
             return layer;
         }
     }
@@ -1113,14 +1124,14 @@ export async function saveFillNeuralLayer(layerGroup=app.activeDocument.layers) 
 }
 
 export async function saveFineSplitHintLayer(layerGroup=app.activeDocument.layers) {
-    if (await saveLayerByName('split-hint', 'split-hint-fine.png', layerGroup)){
+    if (await saveLayerByName('tweak-hint', 'tweak-hint-fine.png', layerGroup)){
         let layer;
         if (layerGroup.isGroupLayer){
-            layer = await getLayerByName('split-hint', layerGroup);
+            layer = await getLayerByName('tweak-hint', layerGroup);
             return layer;       
         }
         else{
-            layer = await cleanLayerbyName('split-hint');
+            layer = await cleanLayerbyName('tweak-hint');
             return layer;
         }
     }
@@ -1134,12 +1145,12 @@ export async function saveCoarseSplitHintLayer() {
     
     // await hideAllLayers();
     // await showSplitHintLayer();
-    // await saveVisibleLayer('split-hint-coarse.png')
+    // await saveVisibleLayer('tweak-hint-coarse.png')
     // await showAllLayers();
 
-    await saveLayerByName('split-hint', 'split-hint-coarse.png');
+    await saveLayerByName('tweak-hint', 'tweak-hint-coarse.png');
     // clear the content in this layer
-    let layer = await cleanLayerbyName('split-hint');
+    let layer = await cleanLayerbyName('tweak-hint');
     return layer;
 }
 

@@ -7,6 +7,7 @@ const st = uxp.storage;
 
 // load resource
 import splitInstruction from '../assets/tweak_example.png'
+import loadingPNG from '../assets/loading.png'
 // import colorIcon from '../assets/color.svg'
 // import tuningIcon from '../assets/tuning.svg'
 
@@ -619,7 +620,7 @@ function Panel() {
                 await moveAboveTo(layerSimplified, bottomLayer);
 
             let unlockWhich;
-            let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
+            let layerMergeHint = await getLayerByName("color-hint", layerGroup);
             if (layerMergeHint !== false){
                 bottomLayer = layers[0];
                 if (layers.indexOf(bottomLayer) - layers.indexOf(layerMergeHint) !== 1){
@@ -627,7 +628,7 @@ function Panel() {
                 }
             }
 
-            let layerSplitHint = await getLayerByName("split-hint", layerGroup);
+            let layerSplitHint = await getLayerByName("tweak-hint", layerGroup);
             if (layerSplitHint !== false){
                 bottomLayer = layers[0];
                 if (layers.indexOf(bottomLayer) - layers.indexOf(layerSplitHint) !== 1){
@@ -958,9 +959,9 @@ function Panel() {
             end = layers.length;
         }
         
-        let splitHintLayer = await getLayerByName("split-hint", layers);
+        let splitHintLayer = await getLayerByName("tweak-hint", layers);
         layers.forEach((l)=>{
-            if (l.name === "merge-hint" && l.visible === true){
+            if (l.name === "color-hint" && l.visible === true){
                 l.visible = false;
             }
             else{
@@ -993,9 +994,9 @@ function Panel() {
             end = layers.length;
         }
 
-        let splitHintLayer = await getLayerByName("split-hint", layers);
+        let splitHintLayer = await getLayerByName("tweak-hint", layers);
         layers.forEach((l)=>{
-            if (l.name === "merge-hint" && l.visible === true){
+            if (l.name === "color-hint" && l.visible === true){
                 l.visible = false;
             }
             else if (l.name === "line_simplified")
@@ -1084,20 +1085,6 @@ function Panel() {
                     haveNewSceneFlatted = true;
                     // resize the doc if necessary
                     let doc = docs.filter(d=>d._id === scenesGlobal[i].documentID)[0];
-                    if (scenesGlobal[i].resize){
-                        // get the new size of the doc
-                        w_new = scenesGlobal[i].newSize[0];
-                        h_new = scenesGlobal[i].newSize[1];
-                        // save to new file and resize
-                        const resizeFolderToken = await localStorage.getItem("resizeFolder");
-                        const resizeFolder = await fs.getEntryForPersistentToken(resizeFolderToken);
-                        const FileNameBP = doc.title.lastIndexOf(".");
-                        const saveFileName = doc.title.substr(0, FileNameBP) + "_resized.psd";
-                        const file = await resizeFolder.createFile(saveFileName, {overwrite: true});
-                        doc.save(file);
-                        doc.resizeImage(w_new, h_new);
-                        console.log("resize file successed");
-                    } 
                     const updatedScene = await flatSingleBackground(scenesGlobal[i]);    
                     // here we need to merge to scene list, cause the scene could be updated
                     // by other place during the flatting
@@ -1416,7 +1403,7 @@ function Panel() {
                 console.log('Loading merge hint');
                 var layerMergeHint;
                 if (merge_hint !== null){
-                    layerMergeHint = await createLinkLayer("merge-hint", merge_hint, true, false, true);
+                    layerMergeHint = await createLinkLayer("color-hint", merge_hint, true, false, true);
                     if ( layerMergeHint === null){
                     return null;
                     }
@@ -1452,14 +1439,14 @@ function Panel() {
                         layerGroup = getWorkingLayerGroup();
                         let layerMergeHintPre;
                         if (layerGroup)
-                            layerMergeHintPre = getLayerByName("merge-hint", layerGroup);
+                            layerMergeHintPre = getLayerByName("color-hint", layerGroup);
                         else
-                            layerMergeHintPre = getLayerByName("merge-hint");
+                            layerMergeHintPre = getLayerByName("color-hint");
                         if (layerMergeHintPre && tab !== 0)
-                            layerMergeHint = await layerMergeHintPre.duplicate(doc, "merge-hint");
+                            layerMergeHint = await layerMergeHintPre.duplicate(doc, "color-hint");
                         else
                             // the merge layer will not have failure case, we will create an empty one eventually
-                            layerMergeHint = await doc.createLayer({name:"merge-hint"});
+                            layerMergeHint = await doc.createLayer({name:"color-hint"});
                     }
                     else
                         console.log('Loading merge hint layer failed');
@@ -1469,7 +1456,7 @@ function Panel() {
                 console.log('Loading split hint');
                 var layerSplitHint;
                 if (split_hint !== null){
-                    layerSplitHint = await createLinkLayer("split-hint", split_hint, true, false, true);
+                    layerSplitHint = await createLinkLayer("tweak-hint", split_hint, true, false, true);
                     if ( layerSplitHint === null){
                     return null;
                     }
@@ -1504,14 +1491,14 @@ function Panel() {
                         layerGroup = getWorkingLayerGroup();
                         let layerSplitHintPre;
                         if (layerGroup)
-                            layerSplitHintPre = getLayerByName("split-hint", layerGroup);
+                            layerSplitHintPre = getLayerByName("tweak-hint", layerGroup);
                         else
-                            layerSplitHintPre = getLayerByName("split-hint");
+                            layerSplitHintPre = getLayerByName("tweak-hint");
                         
                         if (layerSplitHintPre && tab !== 1)
-                            layerSplitHint = await layerSplitHintPre.duplicate(doc, "split-hint");
+                            layerSplitHint = await layerSplitHintPre.duplicate(doc, "tweak-hint");
                         else
-                            layerSplitHint = await doc.createLayer({name:"split-hint"});
+                            layerSplitHint = await doc.createLayer({name:"tweak-hint"});
                         layerSplitHint.locked = true;
                     }
                     else
@@ -1540,9 +1527,9 @@ function Panel() {
                         doc.layerTree[i].children.forEach(l=>{
                             if (l.visible===false)
                                 l.visible=true;
-                            if (l.name==="merge-hint" && tab===0)
+                            if (l.name==="color-hint" && tab===0)
                                 l.selected=true;
-                            else if (l.name==="split-hint" && tab===1)
+                            else if (l.name==="tweak-hint" && tab===1)
                                 l.selected=true;
                         })
                     }
@@ -1612,7 +1599,7 @@ function Panel() {
         if (mergeLayer === false){
             return false;
         }
-        const stroke = await loadBase64('merge-hint.png');
+        const stroke = await loadBase64('color-hint.png');
         var fill_neural;
         var line_artist;        
         var fill_artist;
@@ -1762,7 +1749,7 @@ function Panel() {
         if (splitLayer === false){
             return false;
         }
-        const stroke = await loadBase64('split-hint-fine.png');
+        const stroke = await loadBase64('tweak-hint-fine.png');
 
         // load the fill results
         const fill_neural_in = scene.image[scene.historyIndex];
@@ -1989,8 +1976,8 @@ function Panel() {
             const doc = app.activeDocument;
             const scene = scenesGlobal.filter((s)=>s.documentID===app.activeDocument._id)[0];
             const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
-            let splitHintLayer = await getLayerByName("split-hint", layerGroup);
-            let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
+            let splitHintLayer = await getLayerByName("tweak-hint", layerGroup);
+            let layerMergeHint = await getLayerByName("color-hint", layerGroup);
             
             // unselect other layers 
             doc.layers.forEach((layer)=>{
@@ -2057,8 +2044,8 @@ function Panel() {
             const doc = app.activeDocument;
             const scene = scenesGlobal.filter((s)=>s.documentID===app.activeDocument._id)[0];
             const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
-            let layerMergeHint = await getLayerByName("merge-hint", layerGroup);
-            let layerSplitHint = await getLayerByName("split-hint", layerGroup);
+            let layerMergeHint = await getLayerByName("color-hint", layerGroup);
+            let layerSplitHint = await getLayerByName("tweak-hint", layerGroup);
             
             // unselect other layers 
             doc.layers.forEach((layer)=>{
@@ -2218,31 +2205,8 @@ function Panel() {
 
     };
 
-    const ActionGroup = (props)=>{
+    const ColorizeReady = (props)=>{
         return(
-            <div class="group" 
-                     style={{
-                        display: "block",
-                        height:"60px"}}>
-                    <sp-body
-                        style={{
-                            margin: 0,
-                            position: "absolute",
-                            top: "50%",
-                            msTransform: "translateY(-50%)",
-                            transform: "translateY(-50%)"}}>
-                        {isInitail? <InitailTab/> : (isFlatting ? <WorkingTab/> : <ReadyTab action={props.action} text={props.text}/>)}
-                    </sp-body>
-            </div>)
-    }
-
-    const FlattingTab = (      
-        //https://www.reactenlightenment.com/react-jsx/5.1.html
-        // JSX allows us to put HTML into JavaScript.
-        // https://reactjs.org/docs/introducing-jsx.html 
-        <div style={TabDIV}>
-            <div class="group">
-            <sp-label>Palette</sp-label>
             <sp-body size="XS" 
                     style={{ 
                         display: "block",
@@ -2277,43 +2241,151 @@ function Panel() {
                         Export Layers
                     </sp-action-button>
                 </div>    
-            </sp-body>
+            </sp-body>);
+    }
+
+    const ColorizeInitial = (props)=>{
+        return(
+            <sp-body size="XS" 
+                    style={{ 
+                        display: "block",
+                        height:"200px",
+                        overflowY:"scroll",
+                        overflowX: "hidden"}}>
+                        
+            </sp-body>);
+    }
+
+        const ColorizesWorking = (props)=>{
+        return(
+            <sp-body size="XS" 
+                    style={{ 
+                        display: "block",
+                        height:"200px",
+                        overflowY:"scroll",
+                        overflowX: "hidden"}}>
+                <img
+                    width="100%"
+                    src={loadingPNG}
+                    style={{
+                        marginLeft: "auto",
+                        marginRight: "auto"}}
+                />
+            </sp-body>);
+    }
+
+    const ColorizeGroups = (props)=>{
+        return(
+            <div>
+                {isInitail? <ColorizeInitial/> : (isFlatting ? <ColorizesWorking/> : <ColorizeReady/>)}
+            </div>)
+    }
+
+    const ActionGroup = (props)=>{
+        return(
+            <div class="group" 
+                     style={{
+                        display: "block",
+                        height:"60px"}}>
+                    <sp-body
+                        style={{
+                            margin: 0,
+                            position: "absolute",
+                            top: "50%",
+                            msTransform: "translateY(-50%)",
+                            transform: "translateY(-50%)"}}>
+                        {isInitail? <InitailTab/> : (isFlatting ? <WorkingTab/> : <ReadyTab action={props.action} text={props.text}/>)}
+                    </sp-body>
+            </div>)
+    }
+
+    const FlattingTab = (      
+        //https://www.reactenlightenment.com/react-jsx/5.1.html
+        // JSX allows us to put HTML into JavaScript.
+        // https://reactjs.org/docs/introducing-jsx.html 
+        <div style={TabDIV}>
+            <div class="group">
+            <sp-label>Palette</sp-label>
+            <ColorizeGroups/>
             </div>
             <ActionGroup action={tryMerge} text="Colorize"></ActionGroup>
         </div>
         
     );
     
+    const TweakReady = () =>{
+        return(
+            <sp-body size="XS"
+             style={{    
+                    display: "block",
+                    height:"200px",
+                    overflowY:"scroll"}}>
+            <img
+                width="100%"
+                src={splitInstruction}
+            />
+            <sp-radio-group name="view">
+                <sp-radio value="first" checked onClick={setAddMode}>Edit</sp-radio>
+                <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
+            </sp-radio-group> 
+
+            <sp-radio-group name="view">
+            </sp-radio-group>
+            <sp-action-button label="Refresh" onClick={toFlatLayers} style={{position: "relative", "zIndex": 99}}>
+                <div slot="icon" class="icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                      <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M15,14H6V12H9.8V11H6V9H9.8V8H2V4H15V2.5a.5.5,0,0,0-.5-.5H.5a.5.5,0,0,0-.5.5v13a.5.5,0,0,0,.5.5h14a.5.5,0,0,0,.5-.5ZM5,14H2V9H5Z" />
+                      <path class="a" d="M14,7V5.336a.25.25,0,0,1,.433-.1705L18,9l-3.567,3.8345A.25.25,0,0,1,14,12.664V11H11.5a.5.5,0,0,1-.5-.5v-3a.5.5,0,0,1,.5-.5Z" />
+                    </svg>
+                </div>
+                Export Layers
+            </sp-action-button>
+        </sp-body>)
+    }
+    const TweakInitial = () =>{
+        return(
+            <sp-body size="XS"
+             style={{    
+                    display: "block",
+                    height:"200px",
+                    overflowY:"scroll"}}>
+            <img
+                width="100%"
+                src={splitInstruction}
+            />
+        </sp-body>)
+    }
+
+    const TweakWorking = () =>{
+        return(
+            <sp-body size="XS" 
+                    style={{ 
+                        display: "block",
+                        height:"200px",
+                        overflowY:"scroll",
+                        overflowX: "hidden"}}>
+                <img
+                    width="100%"
+                    src={loadingPNG}
+                    style={{
+                        marginLeft: "auto",
+                        marginRight: "auto"}}
+                />
+            </sp-body>)
+    }
+
+    const TweakGroups = (props)=>{
+    return(
+        <div>
+            {isInitail? <TweakInitial/> : (isFlatting ? <TweakWorking/> : <TweakReady/>)}
+        </div>)
+    }
+
     // TODO: try to make this function connect to API, or just remove this function
     const ColoringTab = (
         <div style={TabDIV}>
             <div class="group" ><sp-label>Instruction</sp-label>
-                <sp-body size="XS"
-                         style={{    
-                                display: "block",
-                                height:"200px",
-                                overflowY:"scroll"}}>
-                <img
-                    width="100%"
-                    src={splitInstruction}
-                />
-                <sp-radio-group name="view">
-                    <sp-radio value="first" checked onClick={setAddMode}>Edit</sp-radio>
-                    <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
-                </sp-radio-group> 
-
-                <sp-radio-group name="view">
-                </sp-radio-group>
-                <sp-action-button label="Refresh" onClick={toFlatLayers} style={{position: "relative", "zIndex": 99}}>
-                    <div slot="icon" class="icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                          <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M15,14H6V12H9.8V11H6V9H9.8V8H2V4H15V2.5a.5.5,0,0,0-.5-.5H.5a.5.5,0,0,0-.5.5v13a.5.5,0,0,0,.5.5h14a.5.5,0,0,0,.5-.5ZM5,14H2V9H5Z" />
-                          <path class="a" d="M14,7V5.336a.25.25,0,0,1,.433-.1705L18,9l-3.567,3.8345A.25.25,0,0,1,14,12.664V11H11.5a.5.5,0,0,1-.5-.5v-3a.5.5,0,0,1,.5-.5Z" />
-                        </svg>
-                    </div>
-                    Export Layers
-                </sp-action-button>
-                </sp-body>
+            <TweakGroups/>
             </div> 
             <ActionGroup action={trySplitFine} text="Tweak"></ActionGroup>
         </div>
@@ -2471,7 +2543,7 @@ function Panel() {
                         onChange={handleTabChange}
                         variant='fullWidth'
                         disabled={isFlatting}>
-                        <StyledTab label="Flat" />
+                        <StyledTab label="Color" />
                         <StyledTab label="Tweak" />
                         <StyledTab label="Settings" />
                     </StyledTabs>
