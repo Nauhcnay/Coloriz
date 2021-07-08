@@ -502,7 +502,7 @@ function Panel() {
         // clear all local stroage settings
         localStorage.clear();
         // 
-        if (setPersistentFolder())
+        if (setPersistentFolder() === true)
             app.showAlert("plugin re-initialize successed");
         else
             app.showAlert("plugin re-initialize falied, please try close Photoshop and start to initailize all over again");
