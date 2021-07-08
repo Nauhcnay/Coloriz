@@ -28,7 +28,6 @@ import {
     loadBase64,
     loadLayers,
     activatePaintBucket,
-    setColor,
     unlockLayer,
     loadLineArtist,
     moveSplitHintToTop,
@@ -2116,6 +2115,41 @@ function Panel() {
         }
             
     }
+
+    async function setColor(hex) {
+        const { r, g, b } = hexToRgb(hex)
+        const [hue, saturation, brightness] = RGBtoHSB(r, g, b)
+        const result = await batchPlay(
+        [
+        {
+            "_obj": "set",
+            "_target": [
+                {
+                    "_ref": "color",
+                    "_property": "foregroundColor"
+                }
+            ],
+            "to": {
+                "_obj": "HSBColorClass",
+                "hue": {
+                    "_unit": "angleUnit",
+                    "_value": hue
+                },
+                "saturation": saturation,
+                "brightness": brightness
+            },
+            "source": "photoshopPicker",
+            "_isCommand": false,
+            "_options": {
+                "dialogOptions": "dontDisplay"
+            }
+        }
+        ],{
+        "synchronousExecution": false,
+        "modalBehavior": "fail"
+        });
+
+    }
  
     const ColorBlob = ({name, color, selected, label }) => {
         if (selected === name+color){
@@ -2252,7 +2286,7 @@ function Panel() {
                         height:"200px",
                         overflowY:"scroll",
                         overflowX: "hidden"}}>
-                        
+
             </sp-body>);
     }
 
