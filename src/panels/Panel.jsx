@@ -51,7 +51,8 @@ import {
     ensurePersistentToken,
     setColorYellow,
     setPersistentFolder,
-    setColor
+    setColor,
+    sleep
 } from '../functions';
 
 import { Modal } from 'antd'; // why import this line? it is not used anywhere
@@ -2121,15 +2122,17 @@ function Panel() {
             
     }
 
-    const handleColorBlobhover = (name, color, label) => {
+    const handleColorBlobHover = (name, color, label) => {
         let toolTips = document.querySelectorAll("sp-tooltip");
         toolTips.forEach((t)=>{
             if (t.id === "tip"+name+color+label)
                 t.open = true;
-            else
-                t.open = false;
         })
-            
+    }
+
+    const handleColorBlobOut = () => {
+        let toolTips = document.querySelectorAll("sp-tooltip");
+        toolTips.forEach((t)=>{t.open = false})
     }
 
     const ColorBlob = ({name, color, selected, label }) => {
@@ -2140,9 +2143,10 @@ function Panel() {
                             <Grid 
                                 disabled = {isFlatting}
                                 onClick={() => handleColorBlobClick(name, color, label)}
-                                onMouseOver={() => handleColorBlobhover(name, color, label)}  
+                                onMouseOver={() => handleColorBlobHover(name, color, label)}
+                                onMouseOut={()=>handleColorBlobOut()}  
                                 style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
-                                <sp-tooltip id={"tip"+name+color+label} placement="bottom">{label}</sp-tooltip>
+                                <sp-tooltip id={"tip"+name+color+label} placement="right">{label}</sp-tooltip>
                             </Grid>
                     </Badge>
                 
@@ -2153,9 +2157,10 @@ function Panel() {
                     <Grid 
                         disabled = {isFlatting}
                         onClick={() => handleColorBlobClick(name, color, label)}
-                        onMouseOver={() => handleColorBlobhover(name, color, label)}  
+                        onMouseOver={() => handleColorBlobHover(name, color, label)}
+                        onMouseOut={()=>handleColorBlobOut()}    
                         style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
-                        <sp-tooltip id={"tip"+name+color+label} placement="bottom">{label}</sp-tooltip>
+                        <sp-tooltip id={"tip"+name+color+label} placement="right">{label}</sp-tooltip>
                     </Grid>
                 ) 
 

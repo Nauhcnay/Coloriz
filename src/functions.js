@@ -18,7 +18,7 @@ const Buffer = require('buffer/').Buffer;
 
 var isReading = false;
 
-function sleep(ms) {
+export function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));``
 }
 
