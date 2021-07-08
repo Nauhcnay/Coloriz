@@ -4,6 +4,7 @@ import photoshop from 'photoshop';
 import uxp from 'uxp';
 const fs = uxp.storage.localFileSystem;
 const st = uxp.storage;
+const batchPlay = photoshop.action.batchPlay;
 
 // load resource
 import splitInstruction from '../assets/tweak_example.png'
@@ -49,7 +50,8 @@ import {
     setBrushSize,
     ensurePersistentToken,
     setColorYellow,
-    setPersistentFolder
+    setPersistentFolder,
+    setColor
 } from '../functions';
 
 import { Modal } from 'antd'; // why import this line? it is not used anywhere
@@ -2099,7 +2101,9 @@ function Panel() {
 
     }
 
-    const handleColorBlobClick = async(name, color) => {
+    const handleColorBlobClick = async(name, color, label) => {
+        setColorLabel(label);
+        setSelectedPalette(name);
         if (isFlatting || isInitail)
             return null;
         else
@@ -2116,57 +2120,20 @@ function Panel() {
             
     }
 
-    async function setColor(hex) {
-        const { r, g, b } = hexToRgb(hex)
-        const [hue, saturation, brightness] = RGBtoHSB(r, g, b)
-        const result = await batchPlay(
-        [
-        {
-            "_obj": "set",
-            "_target": [
-                {
-                    "_ref": "color",
-                    "_property": "foregroundColor"
-                }
-            ],
-            "to": {
-                "_obj": "HSBColorClass",
-                "hue": {
-                    "_unit": "angleUnit",
-                    "_value": hue
-                },
-                "saturation": saturation,
-                "brightness": brightness
-            },
-            "source": "photoshopPicker",
-            "_isCommand": false,
-            "_options": {
-                "dialogOptions": "dontDisplay"
-            }
-        }
-        ],{
-        "synchronousExecution": false,
-        "modalBehavior": "fail"
-        });
-
-    }
- 
     const ColorBlob = ({name, color, selected, label }) => {
         if (selected === name+color){
-            setColorLabel(label);
-            setSelectedPalette(name);
             return (
                 <Badge color="primary" variant="dot" invisible={false}>
                     <Grid 
                         disabled = {isFlatting}
-                        onClick={() => handleColorBlobClick(name, color)} 
+                        onClick={() => handleColorBlobClick(name, color, label)} 
                         style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}/>
                 </Badge>
             );}
         else
             return <Grid 
                         disabled = {isFlatting}
-                        onClick={() => handleColorBlobClick(name, color)} 
+                        onClick={() => handleColorBlobClick(name, color, label)} 
                         style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}/>;
     }
     
@@ -2175,7 +2142,7 @@ function Panel() {
         <>
             {p.name}: {selectedPalette === p.name? colorLabel:""}
             <Grid item xs={12} style={{ display: 'flex' }}>
-                <Grid container justify="flex-start" spacing={1}>
+                <Grid container justifyContent="flex-start" spacing={1}>
                     {p.colors.map(color => <ColorBlob key={color.color} color={color.color} selected={selectedColor} name={p.name} label={color.label}/>)}
                 </Grid>
             </Grid>
