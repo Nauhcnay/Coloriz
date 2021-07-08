@@ -79,6 +79,7 @@ import SvgIcon from '@material-ui/core/SvgIcon';
 import Avatar from '@material-ui/core/Avatar';
 import Badge from '@material-ui/core/Badge';
 import Input from '@material-ui/core/Input';
+import Tooltip from '@material-ui/core/Tooltip';
 const { confirm } = require("../lib/dialogs.js");
 
 
@@ -2120,28 +2121,51 @@ function Panel() {
             
     }
 
+    const handleColorBlobhover = (name, color, label) => {
+        let toolTips = document.querySelectorAll("sp-tooltip");
+        toolTips.forEach((t)=>{
+            if (t.id === "tip"+name+color+label)
+                t.open = true;
+            else
+                t.open = false;
+        })
+            
+    }
+
     const ColorBlob = ({name, color, selected, label }) => {
         if (selected === name+color){
             return (
-                <Badge color="primary" variant="dot" invisible={false}>
-                    <Grid 
-                        disabled = {isFlatting}
-                        onClick={() => handleColorBlobClick(name, color, label)} 
-                        style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}/>
-                </Badge>
+                
+                    <Badge color="primary" variant="dot" invisible={false}>
+                            <Grid 
+                                disabled = {isFlatting}
+                                onClick={() => handleColorBlobClick(name, color, label)}
+                                onMouseOver={() => handleColorBlobhover(name, color, label)}  
+                                style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
+                                <sp-tooltip id={"tip"+name+color+label} placement="bottom">{label}</sp-tooltip>
+                            </Grid>
+                    </Badge>
+                
             );}
         else
-            return <Grid 
+            return(
+                
+                    <Grid 
                         disabled = {isFlatting}
-                        onClick={() => handleColorBlobClick(name, color, label)} 
-                        style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}/>;
+                        onClick={() => handleColorBlobClick(name, color, label)}
+                        onMouseOver={() => handleColorBlobhover(name, color, label)}  
+                        style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
+                        <sp-tooltip id={"tip"+name+color+label} placement="bottom">{label}</sp-tooltip>
+                    </Grid>
+                ) 
+
     }
     
     const PaletteGrid = ({p})=>{
         return (
         <>
             {p.name}: {selectedPalette === p.name? colorLabel:""}
-            <Grid item xs={12} style={{ display: 'flex' }}>
+            <Grid item xs={12} style={{ display: 'flex' }} id="ColorizePalette">
                 <Grid container justifyContent="flex-start" spacing={1}>
                     {p.colors.map(color => <ColorBlob key={color.color} color={color.color} selected={selectedColor} name={p.name} label={color.label}/>)}
                 </Grid>
@@ -2211,7 +2235,7 @@ function Panel() {
             <sp-body size="XS" 
                     style={{ 
                         display: "block",
-                        height:"200px",
+                        height:"250px",
                         overflowY:"scroll",
                         overflowX: "hidden"}}>
                 {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
@@ -2250,7 +2274,7 @@ function Panel() {
             <sp-body size="XS" 
                     style={{ 
                         display: "block",
-                        height:"200px",
+                        height:"250px",
                         overflowY:"scroll",
                         overflowX: "hidden"}}>
 
@@ -2262,7 +2286,7 @@ function Panel() {
             <sp-body size="XS" 
                     style={{ 
                         display: "block",
-                        height:"200px",
+                        height:"250px",
                         overflowY:"scroll",
                         overflowX: "hidden"}}>
                 <img
@@ -2319,7 +2343,7 @@ function Panel() {
             <sp-body size="XS"
              style={{    
                     display: "block",
-                    height:"200px",
+                    height:"250px",
                     overflowY:"scroll"}}>
             <img
                 width="100%"
@@ -2348,7 +2372,7 @@ function Panel() {
             <sp-body size="XS"
              style={{    
                     display: "block",
-                    height:"200px",
+                    height:"250px",
                     overflowY:"scroll"}}>
             <img
                 width="100%"
@@ -2362,7 +2386,7 @@ function Panel() {
             <sp-body size="XS" 
                     style={{ 
                         display: "block",
-                        height:"200px",
+                        height:"250px",
                         overflowY:"scroll",
                         overflowX: "hidden"}}>
                 <img
