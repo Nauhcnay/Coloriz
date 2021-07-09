@@ -106,6 +106,23 @@ async function confirmReset() {
     }
 };
 
+async function confirmExportLayers() {
+  /* we'll display a dialog here */
+  const feedback = await confirm(
+          "Export current flatting result to layer groups?", //[1]
+          "If you wish to continue flatting after export, the current export result will be removed", //[2]
+          ["No", "Yes"] /*[3]*/
+        );
+  switch (feedback.which) {
+      case 0:
+        /* User canceled */
+        return false;
+      case 1:
+        /* User clicked Enable */
+        return true;
+    }
+};
+
 async function confirmDelPalette(title) {
   /* we'll display a dialog here */
   const feedback = await confirm(
@@ -512,8 +529,10 @@ function Panel() {
 
     async function toFlatLayers(){
         console.log("export flat result to layers")
+        let answer = await confirmExportLayers();
+        if (answer === false)
+            return null;
         setIsFlatting(true);
-
         try{
             // get current working scene
             const doc = app.activeDocument;
@@ -564,6 +583,7 @@ function Panel() {
             // group all writed layers
             layerGroup = await doc.createLayerGroup({name: "Flat layers", fromLayers: layers});
             layerGroup.visible = false;
+            await reorderFlat();
             setIsFlatting(false);
 
             app.showAlert("Export sucessed, please check the \"Flat layers\" group");
@@ -2146,7 +2166,7 @@ function Panel() {
                                 onMouseOver={() => handleColorBlobHover(name, color, label)}
                                 onMouseOut={()=>handleColorBlobOut()}  
                                 style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
-                                <sp-tooltip id={"tip"+name+color+label} placement="right">{label}</sp-tooltip>
+                                <sp-tooltip id={"tip"+name+color+label} placement="bottom">{label}</sp-tooltip>
                             </Grid>
                     </Badge>
                 
@@ -2160,7 +2180,7 @@ function Panel() {
                         onMouseOver={() => handleColorBlobHover(name, color, label)}
                         onMouseOut={()=>handleColorBlobOut()}    
                         style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
-                        <sp-tooltip id={"tip"+name+color+label} placement="right">{label}</sp-tooltip>
+                        <sp-tooltip id={"tip"+name+color+label} placement="bottom">{label}</sp-tooltip>
                     </Grid>
                 ) 
 
