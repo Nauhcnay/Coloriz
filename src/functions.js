@@ -425,8 +425,8 @@ export async function activatePaintBucket() {
  */
 
  // Select layer with given name and unselect the rest
-export async function selectLayerByName(layerName){
-    const layer = getLayerByName(layerName)
+export async function selectLayerByName(layerName, layerGroup=app.activeDocument.layers){
+    const layer = getLayerByName(layerName, layerGroup)
     const result = await batchPlay(
             [
                 {
@@ -1115,6 +1115,36 @@ export async function saveMergeHintLayer(layerGroup=app.activeDocument.layers) {
     
 }
 
+export async function saveAllLayers(fileName, layerGroup){
+    // hide layers that don't need to be displayed
+    app.activeDocument.layerTree.forEach((l)=>{
+        if (l._id !== layerGroup._id && l.visible == true)
+            l.visible = false;
+    })
+
+    layerGroup.children.forEach((lc)=>{
+        if (lc.name === "result_neural")
+            if (lc.visible===false)
+                lc.visible = true;
+        else if (lc.name === "line_artist")
+            if (lc.visible===false)
+                lc.visible = true;
+        else if (lc.visible == true)
+            lc.visible = false;
+    })
+        
+    // save to file
+    try{
+        let entry = await createNewFile(fileName);
+        await app.activeDocument.save(entry);
+        return true;
+    }
+    catch(e){
+        console.log(e);
+        return false;
+    } 
+}
+
 export async function saveLineArtistLayer(layerGroup=app.activeDocument.layers) {
     await saveLayerByName('line_artist', 'line-artist.png', layerGroup);
 }
@@ -1164,10 +1194,8 @@ async function saveLayerByName(layerName, fileName, layerGroup=app.activeDocumen
     }
     else
     {
-        app.showAlert("Please select a color in the palette to start colorize");
         return false;
     }
-    
 }
 
 async function hideAllLayersExcept(layerName, layerGroup=app.activeDocument.layers){
@@ -1342,7 +1370,7 @@ export async function createLinkLayer(layerName, img,
         await setLayerMultiply();
             
     }
-    else if (layerName === "line_artist"){
+    else if (layerName === "line_artist" || layerName.includes("flat_layer")){
         newLayer.locked = false;
         await setLayerMultiply();
         newLayer.locked = true;
