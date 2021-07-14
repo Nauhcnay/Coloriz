@@ -1750,7 +1750,7 @@ function Panel() {
                 );
 
                 // set the bucket tool parameter
-                await setPaintBucketTool(100, 0, true, false, true);
+                await setPaintBucketTool(100, 0, false, false, false);
             }
         }
 
@@ -1934,8 +1934,8 @@ function Panel() {
                     <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
                 </sp-radio-group> 
                  <sp-radio-group name="bucketToolSet">
-                    <sp-radio value="first" checked onClick={()=>setPaintBucketTool(100, 0, true, false, true)}>Fine colorize</sp-radio>
-                    <sp-radio value="second" onClick={()=>setPaintBucketTool(100, 0, false, false, true)}>Fast colorize</sp-radio>
+                    <sp-radio value="first" checked onClick={()=>setPaintBucketTool(100, 0, false, false, false)}>Coarse colorize</sp-radio>
+                    <sp-radio value="second" onClick={()=>setPaintBucketTool(100, 0, false, false, true)}>Fine colorize</sp-radio>
                 </sp-radio-group> 
                 <div>
                     {/*<sp-checkbox>Pro Mode</sp-checkbox>*/}
