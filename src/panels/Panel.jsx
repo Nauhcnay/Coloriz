@@ -84,8 +84,6 @@ import Input from '@material-ui/core/Input';
 import Tooltip from '@material-ui/core/Tooltip';
 const { confirm } = require("../lib/dialogs.js");
 
-
-
 /*
 local variables
 */
@@ -849,8 +847,13 @@ function Panel() {
     }
 
     async function setAddMode(){
-        await showEditMode();
-        addOnly = true;
+        if (addOnly)
+            return null;
+        else{
+            await showEditMode();
+            addOnly = true;    
+        }
+        
     }
 
     async function showFlat(){
@@ -1797,12 +1800,8 @@ function Panel() {
         {
             setSelectedColor(name+color);
             await setColor(color);
-            if (fastHistory){
-                await handleBucketToolClickFast();
-            }
-            else{
-                await handleMergeToolClick(document.querySelector("#mergeSlider").value);
-            }
+            await setPaintBucketTool(100, 0, false, false, false)
+            await showEditMode();
         }
             
     }
@@ -1854,7 +1853,8 @@ function Panel() {
     const PaletteGrid = ({p})=>{
         return (
         <>
-            {p.name}: {selectedPalette === p.name? colorLabel:""}
+            
+            <sp-heading size="XXS" style={{}}>{p.name}: {selectedPalette === p.name? colorLabel:""}</sp-heading>
             <Grid item xs={12} style={{ display: 'flex' }} id="ColorizePalette">
                 <Grid container justifyContent="flex-start" spacing={1}>
                     {p.colors.map(color => <ColorBlob key={color.color} color={color.color} selected={selectedColor} name={p.name} label={color.label}/>)}
@@ -1865,16 +1865,16 @@ function Panel() {
     }
 
     const InitailTab = ()=>{
-        return (<sp-detail>
+        return (<sp-body size="XS">
                    1. Click "Add" on the left to add scenes.<br />
                    2. Select one scene to start.
-                </sp-detail>)
+                </sp-body>)
     };
 
     const WorkingTab = ()=>{
-        return (<sp-detail>
+        return (<sp-body size="XS">
                    Preparing for flatting...
-                </sp-detail>)
+                </sp-body>)
     };
 
     const ReadyTab = (props)=>{
@@ -1886,8 +1886,8 @@ function Panel() {
                                 <path class="a" d="M15.3315,6.271A5.19551,5.19551,0,0,0,11.8355,5H5.5V2.4A.4.4,0,0,0,5.1,2a.39352.39352,0,0,0-.2635.1L1.072,5.8245a.25.25,0,0,0,0,.35L4.834,9.9a.39352.39352,0,0,0,.2635.1.4.4,0,0,0,.4-.4V7h6.441A3.06949,3.06949,0,0,1,15.05,9.9a2.9445,2.9445,0,0,1-2.78274,3.09783Q12.13375,13.005,12,13H8.5a.5.5,0,0,0-.5.5v1a.5.5,0,0,0,.5.5h3.263a5.16751,5.16751,0,0,0,5.213-4.5065A4.97351,4.97351,0,0,0,15.3315,6.271Z" />
                             </svg>
                         </div>
-                        
                     </sp-action-button>
+
                     <sp-action-button id="redoButton" label="Redo" onClick={redoFlat}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
@@ -1895,8 +1895,8 @@ function Panel() {
                                 <path class="a" d="M2.6685,6.271A5.19551,5.19551,0,0,1,6.1645,5H12.5V2.4a.4.4,0,0,1,.4-.4.39352.39352,0,0,1,.2635.1l3.762,3.7225a.25.25,0,0,1,0,.35L13.166,9.9a.39352.39352,0,0,1-.2635.1.4.4,0,0,1-.4-.4V7H6.0615A3.06949,3.06949,0,0,0,2.95,9.9a2.9445,2.9445,0,0,0,2.78274,3.09783Q5.86626,13.005,6,13H9.5a.5.5,0,0,1,.5.5v1a.5.5,0,0,1-.5.5H6.237a5.16751,5.16751,0,0,1-5.213-4.5065A4.97349,4.97349,0,0,1,2.6685,6.271Z" />
                             </svg>
                         </div>
-                        
                     </sp-action-button>
+
                     <sp-action-button label="Flat" onClick={props.action}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
@@ -1907,6 +1907,7 @@ function Panel() {
                         </div>
                         {props.text}
                     </sp-action-button>
+
                     <sp-action-button label="Refresh" onClick={refreshCheckPoint}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
@@ -1916,29 +1917,7 @@ function Panel() {
                             </svg>
                         </div>
                     </sp-action-button>
-                </>)
 
-    };
-
-    const ColorizeReady = (props)=>{
-        return(
-            <sp-body size="XS" 
-                    style={{ 
-                        display: "block",
-                        height:"250px",
-                        overflowY:"scroll",
-                        overflowX: "hidden"}}>
-                {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
-                <sp-radio-group name="view">
-                    <sp-radio value="first" checked onClick={showEditMode}>Edit</sp-radio>
-                    <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
-                </sp-radio-group> 
-                 <sp-radio-group name="bucketToolSet">
-                    <sp-radio value="first" checked onClick={()=>setPaintBucketTool(100, 0, false, false, false)}>Coarse colorize</sp-radio>
-                    <sp-radio value="second" onClick={()=>setPaintBucketTool(100, 0, false, false, true)}>Fine colorize</sp-radio>
-                </sp-radio-group> 
-                <div>
-                    {/*<sp-checkbox>Pro Mode</sp-checkbox>*/}
                     <sp-action-button onClick={toFlatLayers}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
@@ -1946,32 +1925,38 @@ function Panel() {
                               <path class="a" d="M14,7V5.336a.25.25,0,0,1,.433-.1705L18,9l-3.567,3.8345A.25.25,0,0,1,14,12.664V11H11.5a.5.5,0,0,1-.5-.5v-3a.5.5,0,0,1,.5-.5Z" />
                             </svg>
                         </div>
-                        Export Layers
                     </sp-action-button>
-                </div>    
-            </sp-body>);
+                </>)
+
+    };
+
+    const ColorizeReady = (props)=>{
+        return(
+            <div>
+                <div style={{marginTop:"-10px"}}>
+                    {paletteChange.map((p)=> <PaletteGrid key={p.name} p={p}/>)}
+                </div>
+                <sp-heading size="XXS" style={{paddingTop:"2px"}}>Operations</sp-heading>
+                <sp-radio-group name="bucketToolSet">
+                    <sp-radio value="first" checked onClick={()=>setPaintBucketTool(100, 0, false, false, false)}>Colorize</sp-radio>
+                    <sp-radio value="second" onClick={()=>setPaintBucketTool(100, 0, true, false, true)}>Re-colorize</sp-radio>
+                </sp-radio-group>
+                <sp-heading size="XXS" style={{paddingTop:"2px"}}>View mode</sp-heading>
+                <sp-radio-group name="view">
+                    <sp-radio value="first" checked onClick={showEditMode}>Neural lines</sp-radio>
+                    <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
+                </sp-radio-group> 
+            </div>);
     }
 
     const ColorizeInitial = (props)=>{
-        return(
-            <sp-body size="XS" 
-                    style={{ 
-                        display: "block",
-                        height:"250px",
-                        overflowY:"scroll",
-                        overflowX: "hidden"}}>
-
-            </sp-body>);
+        return(<div></div>
+            );
     }
 
         const ColorizesWorking = (props)=>{
         return(
-            <sp-body size="XS" 
-                    style={{ 
-                        display: "block",
-                        height:"250px",
-                        overflowY:"scroll",
-                        overflowX: "hidden"}}>
+            <div>
                 <img
                     width="100%"
                     src={loadingPNG}
@@ -1979,12 +1964,12 @@ function Panel() {
                         marginLeft: "auto",
                         marginRight: "auto"}}
                 />
-            </sp-body>);
+            </div>);
     }
 
     const ColorizeGroups = (props)=>{
         return(
-            <div>
+            <div size="XS">
                 {isInitail? <ColorizeInitial/> : (isFlatting ? <ColorizesWorking/> : <ColorizeReady/>)}
             </div>)
     }
@@ -1995,7 +1980,7 @@ function Panel() {
                      style={{
                         display: "block",
                         height:"60px"}}>
-                    <sp-body
+                    <sp-body size="XS"
                         style={{
                             margin: 0,
                             position: "absolute",
@@ -2012,11 +1997,15 @@ function Panel() {
         // JSX allows us to put HTML into JavaScript.
         // https://reactjs.org/docs/introducing-jsx.html 
         <div style={TabDIV}>
-            <div class="group">
-            <sp-label>Palette</sp-label>
+            <div class="group"
+                style={{ 
+                        display: "block",
+                        height:"320px",
+                        overflowY:"scroll",
+                        overflowX: "hidden"}}>
             <ColorizeGroups/>
             </div>
-            <ActionGroup action={trySetCheckPoint} text="Set Checkpoint"></ActionGroup>
+            <ActionGroup action={trySetCheckPoint} text=""></ActionGroup>
         </div>
         
     );
