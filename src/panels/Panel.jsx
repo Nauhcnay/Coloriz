@@ -1753,7 +1753,7 @@ function Panel() {
                 );
 
                 // set the bucket tool parameter
-                await setPaintBucketTool(100, 0, false, false, false);
+                await setPaintBucketTool(100, 0, false, false, true);
             }
         }
 
@@ -1800,7 +1800,7 @@ function Panel() {
         {
             setSelectedColor(name+color);
             await setColor(color);
-            await setPaintBucketTool(100, 0, false, false, false)
+            await setPaintBucketTool(100, 0, false, false, true)
             await showEditMode();
         }
             
@@ -1938,7 +1938,7 @@ function Panel() {
                 </div>
                 <sp-heading size="XXS" style={{paddingTop:"2px"}}>Operations</sp-heading>
                 <sp-radio-group name="bucketToolSet">
-                    <sp-radio value="first" checked onClick={()=>setPaintBucketTool(100, 0, false, false, false)}>Colorize</sp-radio>
+                    <sp-radio value="first" checked onClick={()=>setPaintBucketTool(100, 0, false, false, true)}>Colorize</sp-radio>
                     <sp-radio value="second" onClick={()=>setPaintBucketTool(100, 0, true, false, true)}>Re-colorize</sp-radio>
                 </sp-radio-group>
                 <sp-heading size="XXS" style={{paddingTop:"2px"}}>View mode</sp-heading>
