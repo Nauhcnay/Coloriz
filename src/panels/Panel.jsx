@@ -83,6 +83,7 @@ import Badge from '@material-ui/core/Badge';
 import Input from '@material-ui/core/Input';
 import Tooltip from '@material-ui/core/Tooltip';
 const { confirm } = require("../lib/dialogs.js");
+import Box from '@material-ui/core/Box';
 
 /*
 local variables
@@ -351,6 +352,8 @@ var isShowing = false;
 var mergeSize = 10;
 var addOnly=true;
 var fireFlat = false;
+var reColorize = false;
+var editMode = true;
 // this option enables fast redo and undo in trade of much more layer spaces required in photoshop
 // it will store 6*n layers for each document (n is number of the colorize and tweak times)
 // disable this option will only maintain 6 layers for each document
@@ -373,10 +376,8 @@ function Panel() {
         }
         else if (newValue===0){
             document.querySelector("#addFlatButton").disabled = false;
-            if (fastHistory)
-                handleBucketToolClickFast();
-            else
-                handleMergeToolClick(mergeSize);
+            handleBucketToolClickFast();
+            
         }
         else
             document.querySelector("#addFlatButton").disabled = true;
@@ -390,9 +391,14 @@ function Panel() {
     const [isInitail, setIsInitail] = useState(true);
     const [flatClicked, setflatClicked] = useState(false);
     const [paletteChange, setPaletteChange] = React.useState(palette);
+    
     const [selectedColor, setSelectedColor] = React.useState(null);
     const [colorLabel, setColorLabel] = React.useState("Please select one color");
     const [selectedPalette, setSelectedPalette] = React.useState(null);
+
+    const [hoveredPalette, setHoveredPalette] = React.useState(null);
+    const [hoveredColor, sethoveredColor] = React.useState(null);
+    
     const [backEnd, setBackEnd] = React.useState("local");
     const [user, setUser] = React.useState("");
     
@@ -716,6 +722,7 @@ function Panel() {
     }
 
     async function showViewMode(){
+        editMode = false;
         let i;
         let end;
         let layers;
@@ -792,6 +799,7 @@ function Panel() {
     };
 
     async function showEditMode(){
+        editMode = true;
         let i;
         let end;
         let layers;
@@ -1055,7 +1063,7 @@ function Panel() {
                 body: JSON.stringify(data)
             })
             const result = await response.json();
-            const { image, line_artist } = result;
+            const { image, line_artist, line_hint } = result;
             console.log('Flatting done!')
 
             targetScene["flatted"] = true;
@@ -1063,7 +1071,8 @@ function Panel() {
             targetScene["line_artist"] =  [null, line_artist];
             targetScene["split_hint"] = [null, null];
             targetScene["historyIndex"]++;     
-            targetScene["working"] = false; 
+            targetScene["working"] = false;
+            targetScene["line_hint"] = [null, line_hint];
             
             return targetScene;
         }
@@ -1112,12 +1121,15 @@ function Panel() {
             var split_hint;
             let layerGroup;
             let line_artist;
+            let line_hint;
 
             scene.historyIndex = scene.historyIndex + offset;
             scene.clicked = true;
             image = scene.image[scene.historyIndex];
             line_artist = scene.line_artist[scene.historyIndex];
             split_hint = scene.split_hint[scene.historyIndex];
+            line_hint = scene.line_hint[scene.historyIndex];
+
 
             // self-check if the scene list is correct
             const batchPlay = photoshop.action.batchPlay;
@@ -1171,6 +1183,29 @@ function Panel() {
                     }
                     else
                         console.log('Loading line art failed');
+                }
+
+                console.log('Loading line hint');
+                var layerLineHint;
+                if (line_hint !== null){
+                    layerLineHint = await createLinkLayer("line_hint", line_hint, true);
+                    if (layerLineHint === null){
+                        return null;
+                    }    
+                }
+                else{
+                    // copy the layer in the last group
+                    if (fastHistory){
+                        let layerLineHintPre = getLayerByName("line_hint");
+                        if (layerLineHintPre)
+                            layerLineHint = await layerLineHintPre.duplicate(doc, "line_hint");
+                        else{
+                            console.log('Loading line hint failed');
+                            return null;
+                        }
+                    }
+                    else
+                        console.log('Loading line hint failed');
                 }
 
                 console.log('Loading split hint');
@@ -1234,7 +1269,7 @@ function Panel() {
                 if (layerGroupList.length===0){
                     layerGroup = await doc.createLayerGroup(
                         {name:`Flat ${scene.historyIndex}`, 
-                        fromLayers: [layerNeural,  layerSplitHint, layerArtist]});
+                        fromLayers: [layerSplitHint, layerLineHint, layerArtist, layerNeural]});
                 }
                 else
                     layerGroup = layerGroupList[0];
@@ -1325,7 +1360,6 @@ function Panel() {
         
         const fill_neural = await loadBase64("flatting_result.png");
         var line_artist;        
-        var fill_artist;
 
         if (scene.line_artist[scene.historyIndex] !== null && (scene.historyIndex) !== 1){
             // only the last element in the history list is not null means it is 
@@ -1366,18 +1400,20 @@ function Panel() {
         })
         // get result 
         const result = await response.json();
-        const { image} = result;
+        const { image, line_hint } = result;
         
         console.log("update current scene and scene list");
         // remove all history that after current index
         scene["line_artist"].splice(scene.historyIndex + 1);
         scene["image"].splice(scene.historyIndex + 1);
         scene["split_hint"].splice(scene.historyIndex + 1);
+        scene["line_hint"].splice(scene.historyIndex + 1);
 
         // update current scene
         scene["line_artist"].push(null);
         scene["image"].push(image);
         scene["split_hint"].push(null);
+        scene["line_hint"].push(line_hint);
         scene.historyIndex++;
         scenesGlobal = scenesGlobal.map(s => {
             if (s.documentID === app.activeDocument._id)
@@ -1457,7 +1493,7 @@ function Panel() {
             line_artist_in = scene.line_artist[scene.historyIndex];
         }
         else
-            line_artist_in = scene.line_artist[1];
+            line_artist_in = scene.line_artist.filter(x=>x!==null).slice(-1)[0];
 
         const data = {
             fileName,
@@ -1489,7 +1525,7 @@ function Panel() {
         const result = await response.json();
         console.log('got result');
         
-        const { line_artist, image} = result;
+        const { line_artist, image, line_hint} = result;
         console.log('Splitting done!');
 
 
@@ -1497,9 +1533,11 @@ function Panel() {
         scene["line_artist"].splice(scene.historyIndex + 1);
         scene["image"].splice(scene.historyIndex + 1);
         scene["split_hint"].splice(scene.historyIndex + 1);
+        scene["line_hint"].splice(scene.historyIndex + 1);
 
         // update the current scene
         scene["line_artist"].push(line_artist);
+        scene["line_hint"].push(line_hint);
         scene["image"].push(image);
         
         scene["split_hint"][scene.split_hint.length - 1] = stroke;
@@ -1625,7 +1663,6 @@ function Panel() {
             const layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
             let splitHintLayer = await getLayerByName("tweak-hint", layerGroup);
             
-
             doc.layerTree.forEach((l)=>{
                 if (l._id === layerGroup._id && l.visible === false){
                     l.visible = true;
@@ -1635,8 +1672,7 @@ function Panel() {
                     })
                 }
                 else if (l.visible===true && l._id !== layerGroup._id)
-                    l.visible = false;
-                
+                    l.visible = false;    
             })
 
             // unselect other layers 
@@ -1686,8 +1722,8 @@ function Panel() {
                "modalBehavior": "fail"
             });
 
-            // await setColor(color);
-            await setColorYellow();
+            await setColor("#9ae42c");
+            // await setColorYellow();
         }
     }
     
@@ -1753,7 +1789,8 @@ function Panel() {
                 );
 
                 // set the bucket tool parameter
-                await setPaintBucketTool(100, 0, false, false, true);
+                await maintainRadioStates();
+
             }
         }
 
@@ -1800,64 +1837,119 @@ function Panel() {
         {
             setSelectedColor(name+color);
             await setColor(color);
-            await setPaintBucketTool(100, 0, false, false, true)
-            await showEditMode();
+            await maintainRadioStates();
+            
         }
             
     }
 
+    async function maintainRadioStates(){
+        let radios = document.querySelectorAll("sp-radio");
+        let radio;
+        if (reColorize){
+            await setPaintBucketTool(100, 0, true, false, true);
+            radio = radios._list.filter((r)=>r.value==="reColorize")[0];
+            radio.checked = true;
+            radio = radios._list.filter((r)=>r.value==="notRecolorize")[0];
+            radio.checked = false;
+        }
+        else{
+            await setPaintBucketTool(100, 0, true, false, false);
+            radio = radios._list.filter((r)=>r.value==="notRecolorize")[0];
+            radio.checked = true;
+            radio = radios._list.filter((r)=>r.value==="reColorize")[0];
+            radio.checked = false;
+        }
+    if (editMode){
+            radio = radios._list.filter((r)=>r.value==="editMode")[0];
+            radio.checked = true;
+            radio = radios._list.filter((r)=>r.value==="viewMode")[0];
+            radio.checked = false;
+        }
+        else{
+            radio = radios._list.filter((r)=>r.value==="viewMode")[0];
+            radio.checked = true;
+            radio = radios._list.filter((r)=>r.value==="editMode")[0];
+            radio.checked = false;
+        }
+    }
+            
     const handleColorBlobHover = (name, color, label) => {
-        let toolTips = document.querySelectorAll("sp-tooltip");
-        toolTips.forEach((t)=>{
-            if (t.id === "tip"+name+color+label)
-                t.open = true;
-        })
-    }
+        sethoveredColor(name+color);
+        setHoveredPalette(name);
+        setColorLabel(label);
+        maintainRadioStates();
 
-    const handleColorBlobOut = () => {
-        let toolTips = document.querySelectorAll("sp-tooltip");
-        toolTips.forEach((t)=>{t.open = false})
     }
-
-    const ColorBlob = ({name, color, selected, label }) => {
-        if (selected === name+color){
-            return (
-                
+    
+    const ColorBlob = ({name, color, selected, hovered, label }) => {
+        if (selected === name+color){      
+            if (hovered === name+color){
+                return(
+                   
                     <Badge color="primary" variant="dot" invisible={false}>
                             <Grid 
                                 disabled = {isFlatting}
                                 onClick={() => handleColorBlobClick(name, color, label)}
                                 onMouseOver={() => handleColorBlobHover(name, color, label)}
-                                onMouseOut={()=>handleColorBlobOut()}  
-                                style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
-                                <sp-tooltip id={"tip"+name+color+label} placement="bottom">{label}</sp-tooltip>
+                                style={{ backgroundColor: color, width: 20, height: 20, margin: 2, border: "1px solid grey"}}>
                             </Grid>
                     </Badge>
+           
+                )
+            }
+            else{
+                return(
+                    <Badge color="primary" variant="dot" invisible={false}>
+                            <Grid 
+                                disabled = {isFlatting}
+                                onClick={() => handleColorBlobClick(name, color, label)}
+                                onMouseOver={() => handleColorBlobHover(name, color, label)}
+                                style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
+                            </Grid>
+                    </Badge>
+                )   
+            }
+        }           
                 
-            );}
-        else
-            return(
+        else{
+            if (hovered === name+color){
+                return(
                 
                     <Grid 
                         disabled = {isFlatting}
                         onClick={() => handleColorBlobClick(name, color, label)}
                         onMouseOver={() => handleColorBlobHover(name, color, label)}
-                        onMouseOut={()=>handleColorBlobOut()}    
-                        style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
-                        <sp-tooltip id={"tip"+name+color+label} placement="bottom">{label}</sp-tooltip>
+                        style={{ backgroundColor: color, width: 20, height: 20, margin: 2, border: "1px solid grey"}}>
                     </Grid>
-                ) 
+             
+                )     
+            }
+            else{
+                return(
+                    <Grid 
+                        disabled = {isFlatting}
+                        onClick={() => handleColorBlobClick(name, color, label)}
+                        onMouseOver={() => handleColorBlobHover(name, color, label)}
+                        style={{ backgroundColor: color, width: 20, height: 20, margin: 2}}>
+                    </Grid>
+                )
+            }
 
+        }
+            
+            
     }
+
     
     const PaletteGrid = ({p})=>{
         return (
         <>
             
-            <sp-heading size="XXS" style={{}}>{p.name}: {selectedPalette === p.name? colorLabel:""}</sp-heading>
+            <sp-heading size="XXS" >{p.name}: {hoveredPalette === p.name? colorLabel:""}</sp-heading>
             <Grid item xs={12} style={{ display: 'flex' }} id="ColorizePalette">
                 <Grid container justifyContent="flex-start" spacing={1}>
-                    {p.colors.map(color => <ColorBlob key={color.color} color={color.color} selected={selectedColor} name={p.name} label={color.label}/>)}
+                    {p.colors.map(color => <ColorBlob key={color.color} color={color.color} selected={selectedColor} hovered={hoveredColor} name={p.name} label={color.label}/>)}
                 </Grid>
             </Grid>
         </>
@@ -1877,7 +1969,65 @@ function Panel() {
                 </sp-body>)
     };
 
-    const ReadyTab = (props)=>{
+    const ReadyTab = ()=>{
+        return (<>
+                    <sp-action-button label="Refresh" onClick={refreshCheckPoint}>
+                        <div slot="icon" class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                              <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
+                              <path class="a" d="M16.337,10H15.39a.6075.6075,0,0,0-.581.469A5.7235,5.7235,0,0,1,5.25,13.006l-.346-.3465L6.8815,10.682A.392.392,0,0,0,7,10.4a.4.4,0,0,0-.377-.4H1.25a.25.25,0,0,0-.25.25v5.375A.4.4,0,0,0,1.4,16a.3905.3905,0,0,0,.28-.118l1.8085-1.8085.178.1785a8.09048,8.09048,0,0,0,3.642,2.1655,7.715,7.715,0,0,0,9.4379-5.47434q.04733-.178.0861-.35816A.5.5,0,0,0,16.337,10Z" />
+                              <path class="a" d="M16.6,2a.3905.3905,0,0,0-.28.118L14.5095,3.9265l-.178-.1765a8.09048,8.09048,0,0,0-3.642-2.1655A7.715,7.715,0,0,0,1.25269,7.06072q-.04677.17612-.08519.35428A.5.5,0,0,0,1.663,8H2.61a.6075.6075,0,0,0,.581-.469A5.7235,5.7235,0,0,1,12.75,4.994l.346.3465L11.1185,7.318A.392.392,0,0,0,11,7.6a.4.4,0,0,0,.377.4H16.75A.25.25,0,0,0,17,7.75V2.377A.4.4,0,0,0,16.6,2Z" />
+                            </svg>
+                        </div>
+                    </sp-action-button>
+
+                    <sp-action-button label="Flat" onClick={trySetCheckPoint}>
+                        <div slot="icon" class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                              <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M17,7A6,6,0,0,0,5.2585,5.2585a6.01888,6.01888,0,0,1,1.15-.2285A5,5,0,1,1,12.97,11.5925a6.01888,6.01888,0,0,1-.2285,1.15A6,6,0,0,0,17,7Z" />
+                              <rect class="a" height="1" width="1" x="7" y="6" />
+                              <rect class="a" height="1" width="1" x="6" y="7" />
+                              <rect class="a" height="1" width="1" x="7" y="8" />
+                              <rect class="a" height="1" width="1" x="6" y="9" />
+                              <rect class="a" height="1" width="1" x="7" y="10" />
+                              <rect class="a" height="1" width="1" x="8" y="11" />
+                              <rect class="a" height="1" width="1" x="8" y="9" />
+                              <rect class="a" height="1" width="1" x="8" y="7" />
+                              <rect class="a" height="1" width="1" x="9" y="8" />
+                              <rect class="a" height="1" width="1" x="9" y="10" />
+                              <path class="a" d="M12,12.9085V12H11v1a5.99342,5.99342,0,0,1-1-.09V12H9v.65a5.96962,5.96962,0,0,1-1-.461V12H7.686A5.94317,5.94317,0,0,1,7,11.463V11H6.537A6.08593,6.08593,0,0,1,6,10.314V10H5.8095A5.928,5.928,0,0,1,5.349,9H6V8H5.09A5.99342,5.99342,0,0,1,5,7H6V6H5.0915a6.035,6.035,0,0,1,.167-.741,6,6,0,1,0,7.483,7.482A6.063,6.063,0,0,1,12,12.9085Z" />
+                              <rect class="a" height="1" width="1" x="10" y="11" />
+                              <rect class="a" height="1" width="1" x="11" y="10" />
+                              <rect class="a" height="1" width="1" x="10" y="9" />
+                              <rect class="a" height="1" width="1" x="11" y="8" />
+                              <rect class="a" height="1" width="1" x="10" y="7" />
+                              <rect class="a" height="1" width="1" x="9" y="6" />
+                              <path class="a" d="M13,11H12v1h.9085A5.94018,5.94018,0,0,0,13,11Z" />
+                              <path class="a" d="M12.65,9H12v1h.91A5.95448,5.95448,0,0,0,12.65,9Z" />
+                              <path class="a" d="M12,7.686V8h.1905C12.1295,7.894,12.0675,7.788,12,7.686Z" />
+                              <path class="a" d="M6,6H7V5a5.94018,5.94018,0,0,0-1,.0915Z" />
+                              <path class="a" d="M8,5.09V6H9V5.35A5.95448,5.95448,0,0,0,8,5.09Z" />
+                              <path class="a" d="M10,5.8095V6h.314C10.212,5.9325,10.106,5.8705,10,5.8095Z" />
+                              <path class="a" d="M11,6.537V7h.463A5.95239,5.95239,0,0,0,11,6.537Z" />
+                            </svg>
+                        </div>
+                        Declutter
+                    </sp-action-button>
+
+                    <sp-action-button onClick={toFlatLayers}>
+                        <div slot="icon" class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
+                              <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M14.144,9.969,9.2245,13.3825a.3945.3945,0,0,1-.45,0L3.856,9.969.929,12a.1255.1255,0,0,0,0,.2055l7.925,5.5a.2575.2575,0,0,0,.292,0l7.925-5.5a.1255.1255,0,0,0,0-.2055Z" />
+                              <path class="a" d="M8.85,11.494.929,6a.1245.1245,0,0,1,0-.205L8.85.297a.265.265,0,0,1,.3,0l7.921,5.496a.1245.1245,0,0,1,0,.205L9.15,11.494A.265.265,0,0,1,8.85,11.494Z" />
+                            </svg>
+                        </div>
+                        Export layers
+                    </sp-action-button>
+                </>)
+
+    };
+
+    const ReadyTabTweak = ()=>{
         return (<>
                    <sp-action-button id="undoButton" label="Undo" onClick={undoFlat}>
                         <div slot="icon" class="icon">
@@ -1897,7 +2047,7 @@ function Panel() {
                         </div>
                     </sp-action-button>
 
-                    <sp-action-button label="Flat" onClick={props.action}>
+                    <sp-action-button label="Flat" onClick={trySplitFine}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
                               <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" /><path class="a" d="M17.489.1885A17.36351,17.36351,0,0,0,4.793,10.995a.261.261,0,0,0,.0625.2725l1.876,1.8755a.261.261,0,0,0,.2705.0635A17.214,17.214,0,0,0,17.8095.509.272.272,0,0,0,17.489.1885Z" />
@@ -1905,7 +2055,7 @@ function Panel() {
                               <path d="M8.424,14.1v3.454a.262.262,0,0,0,.3895.2305c1.376-.777,5.9245-3.688,5.9245-8.2095C13.7,10.61,9.213,14.017,8.424,14.1Z" />
                             </svg>
                         </div>
-                        {props.text}
+                        Tweak
                     </sp-action-button>
 
                     <sp-action-button label="Refresh" onClick={refreshCheckPoint}>
@@ -1921,8 +2071,8 @@ function Panel() {
                     <sp-action-button onClick={toFlatLayers}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                              <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M15,14H6V12H9.8V11H6V9H9.8V8H2V4H15V2.5a.5.5,0,0,0-.5-.5H.5a.5.5,0,0,0-.5.5v13a.5.5,0,0,0,.5.5h14a.5.5,0,0,0,.5-.5ZM5,14H2V9H5Z" />
-                              <path class="a" d="M14,7V5.336a.25.25,0,0,1,.433-.1705L18,9l-3.567,3.8345A.25.25,0,0,1,14,12.664V11H11.5a.5.5,0,0,1-.5-.5v-3a.5.5,0,0,1,.5-.5Z" />
+                              <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M14.144,9.969,9.2245,13.3825a.3945.3945,0,0,1-.45,0L3.856,9.969.929,12a.1255.1255,0,0,0,0,.2055l7.925,5.5a.2575.2575,0,0,0,.292,0l7.925-5.5a.1255.1255,0,0,0,0-.2055Z" />
+                              <path class="a" d="M8.85,11.494.929,6a.1245.1245,0,0,1,0-.205L8.85.297a.265.265,0,0,1,.3,0l7.921,5.496a.1245.1245,0,0,1,0,.205L9.15,11.494A.265.265,0,0,1,8.85,11.494Z" />
                             </svg>
                         </div>
                     </sp-action-button>
@@ -1938,13 +2088,19 @@ function Panel() {
                 </div>
                 <sp-heading size="XXS" style={{paddingTop:"2px"}}>Operations</sp-heading>
                 <sp-radio-group name="bucketToolSet">
-                    <sp-radio value="first" checked onClick={()=>setPaintBucketTool(100, 0, false, false, true)}>Colorize</sp-radio>
-                    <sp-radio value="second" onClick={()=>setPaintBucketTool(100, 0, true, false, true)}>Re-colorize</sp-radio>
+                    <sp-radio value="notRecolorize" checked onClick={()=>{
+                        setPaintBucketTool(100, 0, true, false, false);
+                        reColorize = false;
+                    }}>Colorize</sp-radio>
+                    <sp-radio value="reColorize"  onClick={()=>{
+                        setPaintBucketTool(100, 0, true, false, true);
+                        reColorize = true;
+                    }}>Re-colorize</sp-radio>
                 </sp-radio-group>
                 <sp-heading size="XXS" style={{paddingTop:"2px"}}>View mode</sp-heading>
                 <sp-radio-group name="view">
-                    <sp-radio value="first" checked onClick={showEditMode}>Neural lines</sp-radio>
-                    <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
+                    <sp-radio value="editMode" checked onClick={showEditMode}>Neural lines</sp-radio>
+                    <sp-radio value="viewMode" onClick={showViewMode}>See results</sp-radio>
                 </sp-radio-group> 
             </div>);
     }
@@ -1974,7 +2130,7 @@ function Panel() {
             </div>)
     }
 
-    const ActionGroup = (props)=>{
+    const ActionGroup = ()=>{
         return(
             <div class="group" 
                      style={{
@@ -1987,7 +2143,25 @@ function Panel() {
                             top: "50%",
                             msTransform: "translateY(-50%)",
                             transform: "translateY(-50%)"}}>
-                        {isInitail? <InitailTab/> : (isFlatting ? <WorkingTab/> : <ReadyTab action={props.action} text={props.text}/>)}
+                        {isInitail? <InitailTab/> : (isFlatting ? <WorkingTab/> : <ReadyTab/>)}
+                    </sp-body>
+            </div>)
+    }
+
+    const ActionGroupTweak = ()=>{
+        return(
+            <div class="group" 
+                     style={{
+                        display: "block",
+                        height:"60px"}}>
+                    <sp-body size="XS"
+                        style={{
+                            margin: 0,
+                            position: "absolute",
+                            top: "50%",
+                            msTransform: "translateY(-50%)",
+                            transform: "translateY(-50%)"}}>
+                        {isInitail? <InitailTab/> : (isFlatting ? <WorkingTab/> : <ReadyTabTweak/>)}
                     </sp-body>
             </div>)
     }
@@ -2005,7 +2179,7 @@ function Panel() {
                         overflowX: "hidden"}}>
             <ColorizeGroups/>
             </div>
-            <ActionGroup action={trySetCheckPoint} text=""></ActionGroup>
+            <ActionGroup></ActionGroup>
         </div>
         
     );
@@ -2018,25 +2192,13 @@ function Panel() {
                     height:"250px",
                     overflowY:"scroll"}}>
             <img
-                width="100%"
                 src={splitInstruction}
+                style={{
+                    display: "block",
+                    width:"100%",
+                    marginLeft: "auto",
+                    marginRight: "auto"}}
             />
-            <sp-radio-group name="view">
-                <sp-radio value="first" checked onClick={setAddMode}>Edit</sp-radio>
-                <sp-radio value="second" onClick={showViewMode}>See results</sp-radio>
-            </sp-radio-group> 
-
-            <sp-radio-group name="view">
-            </sp-radio-group>
-            <sp-action-button label="Refresh" onClick={toFlatLayers} style={{position: "relative", "zIndex": 99}}>
-                <div slot="icon" class="icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
-                      <rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="a" d="M15,14H6V12H9.8V11H6V9H9.8V8H2V4H15V2.5a.5.5,0,0,0-.5-.5H.5a.5.5,0,0,0-.5.5v13a.5.5,0,0,0,.5.5h14a.5.5,0,0,0,.5-.5ZM5,14H2V9H5Z" />
-                      <path class="a" d="M14,7V5.336a.25.25,0,0,1,.433-.1705L18,9l-3.567,3.8345A.25.25,0,0,1,14,12.664V11H11.5a.5.5,0,0,1-.5-.5v-3a.5.5,0,0,1,.5-.5Z" />
-                    </svg>
-                </div>
-                Export Layers
-            </sp-action-button>
         </sp-body>)
     }
     const TweakInitial = () =>{
@@ -2047,8 +2209,14 @@ function Panel() {
                     height:"250px",
                     overflowY:"scroll"}}>
             <img
-                width="100%"
+                
                 src={splitInstruction}
+                display="block"
+                style={{
+                    width:"100%",
+                    textAlign: "center",
+                    marginLeft: "auto",
+                    marginRight: "auto"}}
             />
         </sp-body>)
     }
@@ -2062,9 +2230,11 @@ function Panel() {
                         overflowY:"scroll",
                         overflowX: "hidden"}}>
                 <img
-                    width="100%"
+                    
                     src={loadingPNG}
                     style={{
+                        display: "block",
+                        width:"100%",
                         marginLeft: "auto",
                         marginRight: "auto"}}
                 />
@@ -2081,10 +2251,15 @@ function Panel() {
     // TODO: try to make this function connect to API, or just remove this function
     const ColoringTab = (
         <div style={TabDIV}>
-            <div class="group" ><sp-label>Instruction</sp-label>
-            <TweakGroups/>
+            <div class="group" 
+                style={{ 
+                        display: "block",
+                        height:"320px",
+                        overflowY:"scroll",
+                        overflowX: "hidden"}}>
+                <TweakGroups/>
             </div> 
-            <ActionGroup action={trySplitFine} text="Tweak"></ActionGroup>
+            <ActionGroupTweak></ActionGroupTweak>
         </div>
     )
 
