@@ -371,7 +371,7 @@ function Panel() {
         setTab(newValue);
         if (newValue===1){
             document.querySelector("#addFlatButton").disabled = false;
-            handleFineSplitToolClickFast(3);
+            handleFineSplitToolClickFast(2);
             addOnly = true;
         }
         else if (newValue===0){
@@ -606,8 +606,10 @@ function Panel() {
             types: st.fileTypes.text
         });
         let paletteText = await file.read();
-        if (typeof paletteText !== undefined)
+        if (typeof paletteText !== undefined){
             setPaletteChange(JSON.parse(paletteText));
+            app.showAlert("Palette load successed!");
+        }
     };
 
     async function savePalette(){
@@ -1304,7 +1306,7 @@ function Panel() {
             if (tab === 0)
                 await handleBucketToolClickFast();
             else if (tab === 1)
-                await handleFineSplitToolClickFast(3);
+                await handleFineSplitToolClickFast(2);
 
             // update the scenes click state
             // but, of course, this is not need to repeated everytime
@@ -1349,6 +1351,11 @@ function Panel() {
         var layerGroup = false;
         layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
         if (layerGroup){
+            doc.layerTree.forEach((l)=>{
+                if (l._id !== layerGroup._id){
+                    l.visible = false;
+                }
+            })
             layerGroup.children.forEach((l)=>{
                 if (l.name==="tweak-hint" && l.visible === true)
                     l.visible = false;
@@ -1359,18 +1366,20 @@ function Panel() {
             return null;
         
         const fill_neural = await loadBase64("flatting_result.png");
+        
+        // read the merged layer as line_artist
         var line_artist;        
-
-        if (scene.line_artist[scene.historyIndex] !== null && (scene.historyIndex) !== 1){
-            // only the last element in the history list is not null means it is 
-            // necessary to load the line art layer, otherwise
-            // we could save some loading time
-            line_artist = scene.line_artist[scene.historyIndex]
-        }
-        else{
-            line_artist = scene.line_artist.filter(x=>x!==null).slice(-1)[0];
-            // line_artist = scene.line_artist[1];    
-        }
+        layerGroup.children.forEach((l)=>{
+                if (l.name==="tweak-hint" && l.visible === true)
+                    l.visible = false;
+                else if (l.name==="result_neural" && l.visible === true)
+                    l.visible = false;
+                else if (l.visible === false)
+                    l.visible = true;
+            });
+        await saveAllLayers("line_artist.png", layerGroup);
+        line_artist = await loadBase64("line_artist.png");
+        
         
 
         // construct the merge input 
@@ -1466,8 +1475,15 @@ function Panel() {
                 userName = "anonymous";
 
         // load current flatting result
+        
         layerGroup = doc.layerTree.filter(layer=>layer.name === `Flat ${scene.historyIndex}`)[0];
+
         if (layerGroup){
+            doc.layerTree.forEach((l)=>{
+                if (l._id !== layerGroup._id){
+                    l.visible = false;
+                }
+            })
             layerGroup.children.forEach((l)=>{
                 if (l.name==="tweak-hint" && l.visible === true)
                     l.visible = false;
@@ -1489,11 +1505,30 @@ function Panel() {
         const stroke = await loadBase64('tweak-hint-fine.png');
         
         let line_artist_in;
-        if (scene.line_artist[scene.historyIndex] !== null && (scene.historyIndex) !== 1){
-            line_artist_in = scene.line_artist[scene.historyIndex];
+        if (scene.line_artist[scene.historyIndex] === null){
+            line_artist_in = scene.line_artist.slice(0, scene.historyIndex).filter((l)=>l!==null).slice(-1)[0];         
         }
         else
-            line_artist_in = scene.line_artist.filter(x=>x!==null).slice(-1)[0];
+            line_artist_in = scene.line_artist[scene.historyIndex];
+        // layerGroup.children.forEach((l)=>{
+        //         if (l.name==="tweak-hint")
+        //             l.visible = false;
+        //         else if (l.name==="result_neural")
+        //             l.visible = false;
+        //         else if (l.name==="result_neural")
+        //             l.visible = false;
+        //         else
+        //             l.visible = true;
+        //     });
+        // await saveAllLayers("line_artist_in.png", layerGroup);
+        // line_artist_in = await loadBase64("line_artist_in.png");
+
+        let line_hint_in;
+        if (scene.line_hint[scene.historyIndex] === null){
+            line_hint_in = scene.line_hint.slice(0, scene.historyIndex).filter((l)=>l!==null).slice(-1)[0];         
+        }
+        else
+            line_hint_in = scene.line_hint[scene.historyIndex];
 
         const data = {
             fileName,
@@ -1501,6 +1536,7 @@ function Panel() {
             line_artist: line_artist_in,
             fill_neural: fill_neural_in,
             stroke,
+            line_hint:line_hint_in,
             mode: addOnly,
         };
         
@@ -1837,6 +1873,8 @@ function Panel() {
         {
             setSelectedColor(name+color);
             await setColor(color);
+            reColorize = false;
+            await setPaintBucketTool(100, 0, true, false, false);
             await maintainRadioStates();
             
         }
@@ -1849,28 +1887,52 @@ function Panel() {
         if (reColorize){
             await setPaintBucketTool(100, 0, true, false, true);
             radio = radios._list.filter((r)=>r.value==="reColorize")[0];
-            radio.checked = true;
+            if (radio){
+                if (radio.checked===false)
+                    radio.checked = true;                    
+            }
             radio = radios._list.filter((r)=>r.value==="notRecolorize")[0];
-            radio.checked = false;
+            if (radio){
+                if (radio.checked)
+                    radio.checked = false;
+            }
         }
         else{
             await setPaintBucketTool(100, 0, true, false, false);
             radio = radios._list.filter((r)=>r.value==="notRecolorize")[0];
-            radio.checked = true;
+            if (radio){
+                if (radio.checked===false)
+                    radio.checked = true;
+            }
             radio = radios._list.filter((r)=>r.value==="reColorize")[0];
-            radio.checked = false;
+            if (radio){
+                if (radio.checked)
+                    radio.checked = false;
+            }
         }
     if (editMode){
             radio = radios._list.filter((r)=>r.value==="editMode")[0];
-            radio.checked = true;
+            if (radio){
+                if (radio.checked===false)
+                    radio.checked = true;
+            }
             radio = radios._list.filter((r)=>r.value==="viewMode")[0];
-            radio.checked = false;
+            if (radio){
+                if (radio.checked)
+                    radio.checked = false;
+            }
         }
         else{
             radio = radios._list.filter((r)=>r.value==="viewMode")[0];
-            radio.checked = true;
+            if (radio){
+                if (radio.checked===false)
+                    radio.checked = true;
+            }
             radio = radios._list.filter((r)=>r.value==="editMode")[0];
-            radio.checked = false;
+            if (radio){
+                if (radio.checked)
+                    radio.checked = false;
+            }
         }
     }
             
@@ -1892,7 +1954,7 @@ function Panel() {
                                 disabled = {isFlatting}
                                 onClick={() => handleColorBlobClick(name, color, label)}
                                 onMouseOver={() => handleColorBlobHover(name, color, label)}
-                                style={{ backgroundColor: color, width: 20, height: 20, margin: 2, border: "1px solid grey"}}>
+                                style={{ backgroundColor: color, width: 20, height: 20, margin: 2, border: "1px solid white"}}>
                             </Grid>
                     </Badge>
            
@@ -1920,7 +1982,7 @@ function Panel() {
                         disabled = {isFlatting}
                         onClick={() => handleColorBlobClick(name, color, label)}
                         onMouseOver={() => handleColorBlobHover(name, color, label)}
-                        style={{ backgroundColor: color, width: 20, height: 20, margin: 2, border: "1px solid grey"}}>
+                        style={{ backgroundColor: color, width: 20, height: 20, margin: 2, border: "1px solid white"}}>
                     </Grid>
              
                 )     
@@ -2095,7 +2157,7 @@ function Panel() {
                     <sp-radio value="reColorize"  onClick={()=>{
                         setPaintBucketTool(100, 0, true, false, true);
                         reColorize = true;
-                    }}>Re-colorize</sp-radio>
+                    }}>Fine colorize</sp-radio>
                 </sp-radio-group>
                 <sp-heading size="XXS" style={{paddingTop:"2px"}}>View mode</sp-heading>
                 <sp-radio-group name="view">

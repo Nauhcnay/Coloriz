@@ -1121,18 +1121,6 @@ export async function saveAllLayers(fileName, layerGroup){
         if (l._id !== layerGroup._id && l.visible == true)
             l.visible = false;
     })
-
-    layerGroup.children.forEach((lc)=>{
-        if (lc.name === "result_neural")
-            if (lc.visible===false)
-                lc.visible = true;
-        else if (lc.name === "line_artist")
-            if (lc.visible===false)
-                lc.visible = true;
-        else if (lc.visible == true)
-            lc.visible = false;
-    })
-        
     // save to file
     try{
         let entry = await createNewFile(fileName);
