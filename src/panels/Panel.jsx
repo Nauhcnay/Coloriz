@@ -354,6 +354,7 @@ var addOnly=true;
 var fireFlat = false;
 var reColorize = false;
 var editMode = true;
+var colorHex = "#ffffff";
 // this option enables fast redo and undo in trade of much more layer spaces required in photoshop
 // it will store 6*n layers for each document (n is number of the colorize and tweak times)
 // disable this option will only maintain 6 layers for each document
@@ -540,21 +541,6 @@ function Panel() {
             
     }
     
-    function refreshCheckPoint(){
-        console.log("reodering current layer group")
-        let layerGroup = getWorkingLayerGroup();
-        layerGroup.locked = false;
-        app.activeDocument.layerTree.forEach((l)=>{
-            if (l._id !== layerGroup._id && l.visible === true)
-                l.visible = false;
-            else if (l._id === layerGroup._id && l.visible === false)
-                l.visible = true;
-        })
-        layerGroup.children.forEach((l)=>{
-            if (l.visible === false)
-                l.visible = true;
-        })
-    }
 
     async function forceUnlock(layer){
         // so this function has a side issue
@@ -1303,8 +1289,10 @@ function Panel() {
 
                 }
             }
-            if (tab === 0)
+            if (tab === 0){
+                reColorize = false;
                 await handleBucketToolClickFast();
+            }
             else if (tab === 1)
                 await handleFineSplitToolClickFast(2);
 
@@ -1689,7 +1677,7 @@ function Panel() {
                 return SplitButtonCoarse; 
             }}
 
-    async function handleFineSplitToolClickFast(brushSize) {
+    async function handleFineSplitToolClickFast(brushSize = 2) {
         if (isFlatting || isInitail){
             return null;
         }
@@ -1800,68 +1788,72 @@ function Panel() {
                 layerNeuralFill.locked = false;
             };
 
-            if (photoshop.app.currentTool.id !== "bucketTool"){
-                let result = await batchPlay(
-                    [
-                       {
-                          "_obj": "select",
-                          "_target": [
-                             {
-                                "_ref": "bucketTool",
-                             }
-                          ],
-
-                          "dontRecord": true,
-                          "forceNotify": true,
-                          "_isCommand": false,
-                          "_options": {
-                             "dialogOptions": "dontDisplay"
-                          }
-                       }
-                    ],{
-                       "synchronousExecution": false,
-                       "modalBehavior": "fail"
-                    }
-                );
-
-                // set the bucket tool parameter
-                await maintainRadioStates();
-
-            }
+            // set the bucket tool parameter
+            if (reColorize)
+                await setPaintBucketTool(100, 0, true, false, true);
+            else
+                await setPaintBucketTool(100, 0, true, false, false);
+            setColor(colorHex);
+            await maintainRadioStates();
         }
 
     }
 
     async function setPaintBucketTool(opacity, tolerance, contiguous, antiAlias, allLayers){
-        const result = await batchPlay(
-                    [
-                     {
-                        "_obj": "set",
-                        "_target": [
-                           {"_ref": "bucketTool"}
-                        ],
-                        "to": 
-                        {
-                        
-                         "_obj": "currentToolOptions",
-                         "mode": {
-                            "_enum": "blendMode",
-                            "_value": "normal"
-                         },
-                         "opacity": opacity,
-                         "$BckT": tolerance,
-                         "$BckA": antiAlias,
-                         "$BckS": allLayers,
-                         "contiguous": contiguous,
-                         "$BckF": false,
-                            
+        let result;
+        if (photoshop.app.currentTool.id !== "bucketTool"){
+            result = await batchPlay(
+                [
+                   {
+                      "_obj": "select",
+                      "_target": [
+                         {
+                            "_ref": "bucketTool",
                          }
+                      ],
+
+                      "dontRecord": true,
+                      "forceNotify": true,
+                      "_isCommand": false,
+                      "_options": {
+                         "dialogOptions": "dontDisplay"
                       }
-                   ],
-                  {
-                     "synchronousExecution": false
-                  }
-                );
+                   }
+                ],{
+                   "synchronousExecution": false,
+                   "modalBehavior": "fail"
+                }
+            );
+        }
+        result = await batchPlay(
+            [
+             {
+                "_obj": "set",
+                "_target": [
+                   {"_ref": "bucketTool"}
+                ],
+                "to": 
+                {
+                
+                 "_obj": "currentToolOptions",
+                 "mode": {
+                    "_enum": "blendMode",
+                    "_value": "normal"
+                 },
+                 "opacity": opacity,
+                 "$BckT": tolerance,
+                 "$BckA": antiAlias,
+                 "$BckS": allLayers,
+                 "contiguous": contiguous,
+                 "$BckF": false,
+                    
+                 }
+              }
+           ],
+          {
+             "synchronousExecution": false
+          }
+        );
     }
 
     const handleColorBlobClick = async(name, color, label) => {
@@ -1872,6 +1864,7 @@ function Panel() {
         else
         {
             setSelectedColor(name+color);
+            colorHex = color;
             await setColor(color);
             reColorize = false;
             await setPaintBucketTool(100, 0, true, false, false);
@@ -2033,7 +2026,7 @@ function Panel() {
 
     const ReadyTab = ()=>{
         return (<>
-                    <sp-action-button label="Refresh" onClick={refreshCheckPoint}>
+                    <sp-action-button label="Refresh" onClick={handleBucketToolClickFast}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
                               <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
@@ -2120,7 +2113,7 @@ function Panel() {
                         Tweak
                     </sp-action-button>
 
-                    <sp-action-button label="Refresh" onClick={refreshCheckPoint}>
+                    <sp-action-button label="Refresh" onClick={handleFineSplitToolClickFast}>
                         <div slot="icon" class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18">
                               <rect id="Canvas" fill="#9AE42C" opacity="0" width="18" height="18" />
