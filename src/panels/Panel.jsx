@@ -445,7 +445,7 @@ function Panel() {
         // clear all local stroage settings
         localStorage.clear();
         // 
-        if (setPersistentFolder() === true)
+        if (await setPersistentFolder() === true)
             app.showAlert("plugin re-initialize successed");
         else
             app.showAlert("plugin re-initialize falied, please try close Photoshop and start to initailize all over again");
@@ -606,6 +606,7 @@ function Panel() {
             return;
         }
         await file.write(paletteText);
+        app.showAlert("Palette save successed!");
 
     };
 
@@ -1129,7 +1130,7 @@ function Panel() {
                 })
                 if ((len+1) !== scene.historyIndex){
                     console.log("history index record is not correct!")
-                    app.showAlert("Internal error, please restart the plugin")
+                    app.showAlert("Internal error, please reload current scene")
                     return null;
                 }
             }
@@ -2150,6 +2151,8 @@ function Panel() {
                     <sp-radio value="reColorize"  onClick={()=>{
                         setPaintBucketTool(100, 0, true, false, true);
                         reColorize = true;
+                        showEditMode();
+                        maintainRadioStates();
                     }}>Fine colorize</sp-radio>
                 </sp-radio-group>
                 <sp-heading size="XXS" style={{paddingTop:"2px"}}>View mode</sp-heading>
